@@ -63,7 +63,7 @@ def run_guard(repo_path: str, fail_on_error: bool = False) -> int:
 def run_ui(
     repo_path: str,
     host: str = "127.0.0.1",
-    port: int = 8000,
+    port: int = 3456,
     no_browser: bool = False,
     dry_run: bool = False,
 ) -> int:
@@ -73,7 +73,7 @@ def run_ui(
     print(f"Launching StackBridge Web Visualizer for {repo}...")
     graph_data = get_graph_data(repo)
     print(f"Indexed {len(graph_data['nodes'])} nodes and {len(graph_data['edges'])} edges.")
-    url = f"http://{host}:{port}"
+    url = f"http://localhost:{port}"
     print(f"StackBridge Web Visualizer running on {url}")
 
     if no_browser or dry_run:
@@ -124,7 +124,7 @@ def main() -> None:
     ui_parser = subparsers.add_parser("ui", help="Launch interactive full-stack dependency visualizer")
     ui_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
     ui_parser.add_argument("--host", default="127.0.0.1", help="Host address to bind")
-    ui_parser.add_argument("--port", "-p", type=int, default=8000, help="Port to bind")
+    ui_parser.add_argument("--port", "-p", type=int, default=3456, help="Port to bind")
     ui_parser.add_argument("--no-browser", action="store_true", default=False, help="Do not open browser automatically / dry-run mode")
     ui_parser.add_argument("--dry-run", action="store_true", default=False, help="Run dry run verification without blocking")
 

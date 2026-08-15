@@ -91,7 +91,7 @@ class StackBridgeUIRequestHandler(BaseHTTPRequestHandler):
 def create_ui_server(
     repo_path: Union[str, Path] = ".",
     host: str = "127.0.0.1",
-    port: int = 8000,
+    port: int = 3456,
 ) -> HTTPServer:
     """Factory creating an HTTPServer configured with StackBridge visualizer routes."""
     resolved_repo = Path(repo_path).resolve()
