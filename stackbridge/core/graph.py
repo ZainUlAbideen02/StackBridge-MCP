@@ -170,6 +170,8 @@ class StackGraph:
         parsed_routes: List[tuple[str, BackendRoute]] = []
         parsed_models: List[tuple[str, ORMModel]] = []
 
+        py_files_data: Dict[str, Dict[str, Any]] = {}
+
         for root, dirs, files in os.walk(repo_dir):
             dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache")]
             for file in files:
@@ -189,11 +191,20 @@ class StackGraph:
 
                 elif ext == ".py":
                     try:
-                        routes = py_route_parser.parse_file(full_file_path)
-                        for r in routes:
-                            r.file_path = rel_file_path
-                            r_id = sg.add_backend_route(r)
-                            parsed_routes.append((r_id, r))
+                        with open(full_file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        source_bytes = content.encode("utf-8")
+                        tree = py_route_parser.parser.parse(source_bytes)
+                        prefixes = py_route_parser._extract_router_prefixes(tree.root_node, source_bytes)
+                        imports, includes = py_route_parser._extract_imports_and_includes(tree.root_node, source_bytes)
+                        routes = py_route_parser.parse_code(content, file_path=rel_file_path)
+
+                        py_files_data[rel_file_path] = {
+                            "routes": routes,
+                            "prefixes": prefixes,
+                            "imports": imports,
+                            "includes": includes,
+                        }
                     except Exception:
                         pass
 
@@ -205,6 +216,37 @@ class StackGraph:
                             parsed_models.append((m_id, m))
                     except Exception:
                         pass
+
+        # Resolve cross-file router prefixes
+        file_base_prefixes: Dict[str, str] = {}
+        for file_path, data in py_files_data.items():
+            prefixes = data["prefixes"]
+            includes = data["includes"]
+            imports = data["imports"]
+
+            # Map to imported files
+            for parent_var, target_var, inc_prefix in includes:
+                target_p = prefixes.get(target_var, "")
+                if not target_p and inc_prefix:
+                    target_p = inc_prefix
+                
+                if target_p:
+                    imported_mod = imports.get(target_var, "")
+                    if imported_mod:
+                        mod_path_suffix = imported_mod.replace(".", "/")
+                        for other_file in py_files_data.keys():
+                            if other_file.endswith(f"{mod_path_suffix}.py") or mod_path_suffix in other_file:
+                                file_base_prefixes[other_file] = target_p
+
+        # Register routes with resolved prefixes
+        for file_path, data in py_files_data.items():
+            base_prefix = file_base_prefixes.get(file_path, "")
+            for r in data["routes"]:
+                if base_prefix and not r.raw_path.startswith(base_prefix):
+                    r.raw_path = py_route_parser.resolve_subrouter_prefix(base_prefix, r.raw_path)
+                    r.normalized_path = py_route_parser.resolve_subrouter_prefix(base_prefix, r.normalized_path)
+                r_id = sg.add_backend_route(r)
+                parsed_routes.append((r_id, r))
 
         all_backend_routes = [r for _, r in parsed_routes]
         route_to_id = {r.raw_path: r_id for r_id, r in parsed_routes}

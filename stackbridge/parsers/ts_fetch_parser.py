@@ -81,30 +81,50 @@ class TypeScriptFetchParser:
                 func = node.child_by_field_name("function")
                 args = node.child_by_field_name("arguments")
                 
-                if func and args and func.type == "identifier":
-                    func_name = source_bytes[func.start_byte:func.end_byte].decode("utf-8")
-                    if func_name == "fetch" and len(args.named_children) > 0:
-                        first_arg = args.named_children[0]
-                        line_number = node.start_point.row + 1
-                        
-                        http_method = HttpMethod.GET
-                        if len(args.named_children) > 1:
-                            http_method = self._parse_method_from_options(args.named_children[1], source_bytes)
+                if func and args and len(args.named_children) > 0:
+                    first_arg = args.named_children[0]
+                    line_number = node.start_point.row + 1
+                    matched_call = False
+                    http_method = HttpMethod.GET
 
+                    if func.type == "identifier":
+                        func_name = source_bytes[func.start_byte:func.end_byte].decode("utf-8").lower()
+                        if func_name in ("fetch", "axios", "apiclient", "client", "request", "http"):
+                            matched_call = True
+                            if len(args.named_children) > 1:
+                                http_method = self._parse_method_from_options(args.named_children[1], source_bytes)
+
+                    elif func.type == "member_expression":
+                        prop = func.child_by_field_name("property")
+                        if prop:
+                            prop_name = source_bytes[prop.start_byte:prop.end_byte].decode("utf-8").lower()
+                            if prop_name in ("get", "post", "put", "delete", "patch", "head", "options"):
+                                matched_call = True
+                                try:
+                                    http_method = HttpMethod(prop_name.upper())
+                                except ValueError:
+                                    http_method = HttpMethod.GET
+                            elif prop_name in ("request",):
+                                matched_call = True
+                                if len(args.named_children) > 1:
+                                    http_method = self._parse_method_from_options(args.named_children[1], source_bytes)
+
+                    if matched_call and first_arg:
                         if first_arg.type == "string":
                             raw_val = source_bytes[first_arg.start_byte:first_arg.end_byte].decode("utf-8")
                             cleaned_url = raw_val.strip("'\"`")
-                            calls.append(
-                                FrontendEndpointCall(
-                                    file_path=file_path,
-                                    line_number=line_number,
-                                    raw_url=cleaned_url,
-                                    normalized_path=cleaned_url,
-                                    http_method=http_method,
-                                    path_params=[],
-                                    is_template=False,
+                            if cleaned_url.startswith("/") or "http" in cleaned_url or "/" in cleaned_url:
+                                calls.append(
+                                    FrontendEndpointCall(
+                                        file_path=file_path,
+                                        line_number=line_number,
+                                        raw_url=cleaned_url,
+                                        normalized_path=cleaned_url,
+                                        http_method=http_method,
+                                        path_params=[],
+                                        is_template=False,
+                                    )
                                 )
-                            )
                         elif first_arg.type == "template_string":
                             raw_text, normalized_path, path_params = self._extract_template_string_info(
                                 first_arg, source_bytes

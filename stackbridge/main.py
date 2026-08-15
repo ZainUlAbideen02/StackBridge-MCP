@@ -35,6 +35,31 @@ def run_trace(repo_path: str, target: str) -> int:
     return 0
 
 
+def run_guard(repo_path: str, fail_on_error: bool = False) -> int:
+    """Runs full-stack boundary verification and route guard."""
+    from stackbridge.verifier.guard import StackGuardEngine
+    repo = Path(repo_path).resolve()
+    print(f"Running StackBridge Guard on repository: {repo}...")
+    guard = StackGuardEngine(repo_path=repo)
+    report = guard.check_repo()
+
+    print("=" * 80)
+    print("  StackBridge Guard Verification Summary")
+    print("=" * 80)
+    print(f"  Impacted / Verified Files: {len(report.verified_files)}")
+    print(f"  Diagnostics Found:         {report.error_count}")
+    print(f"  Status:                    {'BREAKAGE DETECTED' if report.has_breakage else 'PASSED (Clean)'}")
+    print("=" * 80)
+
+    if report.has_breakage:
+        for diag in report.diagnostics:
+            print(f"  - [{diag.source.upper()}] {diag.file_path}:{diag.line} - {diag.message}")
+        if fail_on_error:
+            return 1
+
+    return 0
+
+
 def run_serve() -> int:
     """Runs the MCP server."""
     from stackbridge.mcp_server.server import mcp
@@ -60,6 +85,11 @@ def main() -> None:
     trace_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
     trace_parser.add_argument("--target", "-t", required=True, help="Target symbol, model, or route to trace")
 
+    # guard command
+    guard_parser = subparsers.add_parser("guard", help="Run full-stack boundary verification and route guard")
+    guard_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
+    guard_parser.add_argument("--fail-on-error", action="store_true", default=False, help="Exit with non-zero code on error")
+
     # serve command
     serve_parser = subparsers.add_parser("serve", help="Start the MCP server")
 
@@ -69,6 +99,8 @@ def main() -> None:
         sys.exit(run_index(args.repo_path, args.output))
     elif args.command == "trace":
         sys.exit(run_trace(args.repo_path, args.target))
+    elif args.command == "guard":
+        sys.exit(run_guard(args.repo_path, getattr(args, "fail_on_error", False)))
     elif args.command == "serve":
         sys.exit(run_serve())
     else:

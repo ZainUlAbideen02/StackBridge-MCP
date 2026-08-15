@@ -16,9 +16,18 @@ class PythonRouteParser:
         self.py_lang = Language(tspython.language())
         self.parser = Parser(self.py_lang)
 
+    @staticmethod
+    def resolve_subrouter_prefix(base_prefix: str, sub_path: str) -> str:
+        """Concatenates router base prefix and endpoint sub-path ensuring normalized slashes."""
+        clean_prefix = "/" + base_prefix.strip("/") if base_prefix and base_prefix.strip("/") else ""
+        clean_subpath = "/" + sub_path.strip("/") if sub_path and sub_path.strip("/") else ""
+        full_path = f"{clean_prefix}{clean_subpath}"
+        return full_path if full_path else "/"
+
     def _extract_router_prefixes(self, root_node: Node, source_bytes: bytes) -> Dict[str, str]:
-        """Extracts router variables and prefixes, e.g. router = APIRouter(prefix='/api/v1')."""
-        prefixes: Dict[str, str] = {}
+        """Extracts router variables and prefixes, e.g. router = APIRouter(prefix='/api/v1') and include_router."""
+        own_prefixes: Dict[str, str] = {}
+        includes: List[Tuple[str, str, str]] = []
 
         def traverse(node: Node) -> None:
             if node.type == "assignment":
@@ -26,9 +35,10 @@ class PythonRouteParser:
                 right = node.child_by_field_name("right")
                 if left and right and right.type == "call":
                     func = right.child_by_field_name("function")
-                    if func and func.text == b"APIRouter":
+                    if func and func.text in (b"APIRouter", b"FastAPI"):
                         var_name = source_bytes[left.start_byte:left.end_byte].decode("utf-8").strip()
                         args = right.child_by_field_name("arguments")
+                        prefix_val = ""
                         if args:
                             for arg in args.children:
                                 if arg.type == "keyword_argument":
@@ -36,13 +46,97 @@ class PythonRouteParser:
                                     k_value = arg.child_by_field_name("value")
                                     if k_name and k_value and k_name.text == b"prefix":
                                         prefix_val = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8").strip("'\"")
-                                        prefixes[var_name] = prefix_val
+                        own_prefixes[var_name] = prefix_val
+
+            elif node.type in ("expression_statement", "call"):
+                call_node = node if node.type == "call" else (node.children[0] if node.children and node.children[0].type == "call" else None)
+                if call_node:
+                    func = call_node.child_by_field_name("function")
+                    if func and func.type == "attribute":
+                        attr = func.child_by_field_name("attribute")
+                        obj = func.child_by_field_name("object")
+                        if attr and attr.text == b"include_router" and obj:
+                            parent_var = source_bytes[obj.start_byte:obj.end_byte].decode("utf-8").strip()
+                            args = call_node.child_by_field_name("arguments")
+                            if args and len(args.named_children) > 0:
+                                target_var_node = args.named_children[0]
+                                target_var = source_bytes[target_var_node.start_byte:target_var_node.end_byte].decode("utf-8").strip()
+                                inc_prefix = ""
+                                for arg in args.named_children[1:]:
+                                    if arg.type == "keyword_argument":
+                                        k_name = arg.child_by_field_name("name")
+                                        k_value = arg.child_by_field_name("value")
+                                        if k_name and k_value and k_name.text == b"prefix":
+                                            inc_prefix = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8").strip("'\"")
+                                includes.append((parent_var, target_var, inc_prefix))
 
             for child in node.children:
                 traverse(child)
 
         traverse(root_node)
-        return prefixes
+
+        # Compute accumulated prefixes idempotently
+        accumulated: Dict[str, str] = dict(own_prefixes)
+        for _ in range(len(includes) + 1):
+            for parent_var, target_var, inc_prefix in includes:
+                parent_p = accumulated.get(parent_var, "")
+                target_own = own_prefixes.get(target_var, "")
+                combined = self.resolve_subrouter_prefix(parent_p, self.resolve_subrouter_prefix(inc_prefix, target_own))
+                if combined and combined != "/":
+                    accumulated[target_var] = combined
+
+        return accumulated
+
+    def _extract_imports_and_includes(self, root_node: Node, source_bytes: bytes) -> Tuple[Dict[str, str], List[Tuple[str, str, str]]]:
+        """Extracts imported symbols and include_router calls from AST."""
+        imports: Dict[str, str] = {}
+        includes: List[Tuple[str, str, str]] = []
+
+        def traverse(node: Node) -> None:
+            if node.type == "import_from_statement":
+                module_name = ""
+                for child in node.children:
+                    if child.type in ("dotted_name", "relative_import"):
+                        module_name = source_bytes[child.start_byte:child.end_byte].decode("utf-8").strip()
+                        break
+                for child in node.children:
+                    if child.type == "dotted_name" and child.prev_sibling and child.prev_sibling.type == "import":
+                        sym = source_bytes[child.start_byte:child.end_byte].decode("utf-8").strip()
+                        imports[sym] = module_name
+                    elif child.type == "aliased_import":
+                        orig = child.child_by_field_name("name")
+                        alias = child.child_by_field_name("alias")
+                        if alias:
+                            alias_name = source_bytes[alias.start_byte:alias.end_byte].decode("utf-8").strip()
+                            imports[alias_name] = module_name
+
+            elif node.type in ("expression_statement", "call"):
+                call_node = node if node.type == "call" else (node.children[0] if node.children and node.children[0].type == "call" else None)
+                if call_node:
+                    func = call_node.child_by_field_name("function")
+                    if func and func.type == "attribute":
+                        attr = func.child_by_field_name("attribute")
+                        obj = func.child_by_field_name("object")
+                        if attr and attr.text == b"include_router" and obj:
+                            parent_var = source_bytes[obj.start_byte:obj.end_byte].decode("utf-8").strip()
+                            args = call_node.child_by_field_name("arguments")
+                            if args and len(args.named_children) > 0:
+                                target_var_node = args.named_children[0]
+                                target_var = source_bytes[target_var_node.start_byte:target_var_node.end_byte].decode("utf-8").strip()
+                                inc_prefix = ""
+                                for arg in args.named_children[1:]:
+                                    if arg.type == "keyword_argument":
+                                        k_name = arg.child_by_field_name("name")
+                                        k_value = arg.child_by_field_name("value")
+                                        if k_name and k_value and k_name.text == b"prefix":
+                                            inc_prefix = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8").strip("'\"")
+                                includes.append((parent_var, target_var, inc_prefix))
+
+            for child in node.children:
+                traverse(child)
+
+        traverse(root_node)
+        return imports, includes
 
     def _parse_route_decorator(
         self, decorator_node: Node, source_bytes: bytes, prefixes: Dict[str, str]

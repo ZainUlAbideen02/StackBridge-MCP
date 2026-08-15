@@ -18,6 +18,27 @@ class TypeScriptTypeVerifier:
     def __init__(self) -> None:
         self.ts_parser = TypeScriptFetchParser()
 
+    def _is_route_matched(self, call_path: str, known_routes: Set[str]) -> bool:
+        if call_path in known_routes:
+            return True
+        from stackbridge.core.route_matcher import _is_param_segment, _split_segments
+        call_segments = _split_segments(call_path)
+        for route in known_routes:
+            route_segments = _split_segments(route)
+            if len(call_segments) != len(route_segments):
+                continue
+            matched = True
+            for cs, rs in zip(call_segments, route_segments):
+                c_param, _ = _is_param_segment(cs)
+                r_param, _ = _is_param_segment(rs)
+                if not c_param and not r_param:
+                    if cs != rs:
+                        matched = False
+                        break
+            if matched:
+                return True
+        return False
+
     def check_code(
         self,
         target_code: str,
@@ -29,7 +50,7 @@ class TypeScriptTypeVerifier:
 
         for call in calls:
             # If known routes are provided, check if route exists
-            if known_routes and call.normalized_path not in known_routes:
+            if known_routes and not self._is_route_matched(call.normalized_path, known_routes):
                 diagnostics.append(
                     DiagnosticError(
                         file_path=target_file_path,
