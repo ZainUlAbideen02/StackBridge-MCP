@@ -22,6 +22,10 @@ dev = [
     "pytest>=8.0.0",
 ]
 
+[project.scripts]
+stackbridge = "stackbridge.main:main"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
