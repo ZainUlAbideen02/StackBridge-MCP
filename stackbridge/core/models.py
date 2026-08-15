@@ -62,3 +62,79 @@ class ORMModel(BaseModel):
     table_name: Optional[str] = None
     fields: List[ORMField] = Field(default_factory=list)
     relationships: List[str] = Field(default_factory=list)
+
+
+# New models for the route matching engine
+
+class FrontendFetchCall(BaseModel):
+    """Represents a fetch() call extracted from TypeScript/TSX code."""
+    file_path: str
+    line: int
+    raw_expression: str
+    normalized_pattern: str
+    http_method: str = "GET"
+    is_template: bool
+    path_params: list[str] = Field(default_factory=list)
+
+
+class FastAPIRoute(BaseModel):
+    """Represents a FastAPI route decorator extracted from Python code."""
+    file_path: str
+    line: int
+    http_method: str
+    route_path: str
+    normalized_regex: str
+    handler_name: str
+    path_params: list[str] = Field(default_factory=list)
+
+
+class RouteMatchResult(BaseModel):
+    """Represents a match result between a frontend fetch call and a backend route."""
+    frontend_call: FrontendFetchCall
+    backend_route: FastAPIRoute
+    confidence: float
+    match_strategy: str
+    notes: str | None = None
+
+
+class FieldInfo(BaseModel):
+    """Represents a field/column in a SQLAlchemy model or Pydantic schema."""
+    name: str
+    type_annotation: str
+    is_nullable: bool = False
+    is_primary_key: bool = False
+
+
+class SQLAlchemyModelInfo(BaseModel):
+    """Represents a SQLAlchemy declarative model or Pydantic schema extracted from Python code."""
+    file_path: str
+    line: int
+    class_name: str
+    table_name: str | None = None
+    fields: list[FieldInfo] = Field(default_factory=list)
+    relationships: list[str] = Field(default_factory=list)
+
+
+class GraphNode(BaseModel):
+    """Represents a node in the full-stack dependency graph."""
+    id: str
+    node_type: str  # "frontend_component", "api_route", "schema_model", "db_table"
+    file_path: str
+    line: int
+    metadata: dict = Field(default_factory=dict)
+
+
+class GraphEdge(BaseModel):
+    """Represents an edge in the full-stack dependency graph."""
+    source: str
+    target: str
+    relation_type: str  # "FETCHES", "USES_SCHEMA", "MAPS_TO", "HANDLED_BY", "USES_MODEL"
+    confidence: float = 1.0
+    metadata: dict = Field(default_factory=dict)
+
+
+class StackGraphExport(BaseModel):
+    """Represents the serialized export of the full-stack dependency graph."""
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    repo_hash: str
