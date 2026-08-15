@@ -1,9 +1,9 @@
-from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .models import BillingAccount, User, get_db
+from .models import BillingAccount, get_db
 
 router = APIRouter(prefix="/api/v1")
 
@@ -20,7 +20,7 @@ class BillingAccountOut(BaseModel):
     balance: float
 
 
-@router.get("/teams", response_model=List[TeamOut])
+@router.get("/teams", response_model=list[TeamOut])
 def get_teams(db: Session = Depends(get_db)):
     """Fetch all teams."""
     # In a full app, queries teams from DB

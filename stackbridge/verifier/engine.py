@@ -1,8 +1,7 @@
 """Unified Compiler Verifier Engine coordinating blast-radius discovery and baseline-diffing."""
 
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+
 from pydantic import BaseModel, Field
 
 from stackbridge.core.graph import StackGraph
@@ -12,21 +11,21 @@ from stackbridge.verifier.ts_checker import TypeScriptTypeVerifier
 
 class VerificationReport(BaseModel):
     has_breakage: bool
-    diagnostics: List[DiagnosticError] = Field(default_factory=list)
-    impacted_files: List[str] = Field(default_factory=list)
-    verified_files: List[str] = Field(default_factory=list)
+    diagnostics: list[DiagnosticError] = Field(default_factory=list)
+    impacted_files: list[str] = Field(default_factory=list)
+    verified_files: list[str] = Field(default_factory=list)
     error_count: int = 0
 
 
 class VerifierEngine:
     """Coordinates blast-radius dependency analysis and targeted baseline-diffed verification."""
 
-    def __init__(self, repo_path: Optional[Union[str, Path]] = None) -> None:
+    def __init__(self, repo_path: str | Path | None = None) -> None:
         self.repo_path = Path(repo_path).resolve() if repo_path else Path.cwd()
         self.py_verifier = PythonTypeVerifier()
         self.ts_verifier = TypeScriptTypeVerifier()
 
-    def _read_file_safe(self, file_path: Union[str, Path]) -> Optional[str]:
+    def _read_file_safe(self, file_path: str | Path) -> str | None:
         p = Path(file_path)
         if not p.is_absolute():
             p = self.repo_path / p
@@ -40,9 +39,9 @@ class VerifierEngine:
 
     def verify_impacted_files(
         self,
-        modified_files: Dict[str, str],
-        repo_path: Optional[Union[str, Path]] = None,
-        graph: Optional[StackGraph] = None,
+        modified_files: dict[str, str],
+        repo_path: str | Path | None = None,
+        graph: StackGraph | None = None,
     ) -> VerificationReport:
         """
         1. Identifies blast radius of all modified_files using StackGraph.
@@ -56,8 +55,8 @@ class VerifierEngine:
         active_graph = graph or StackGraph.build_from_repo(str(active_repo))
 
         # 2. Compute full blast radius across modified files
-        all_impacted_files: Set[str] = set()
-        for mod_file in modified_files.keys():
+        all_impacted_files: set[str] = set()
+        for mod_file in modified_files:
             all_impacted_files.add(mod_file)
             blast = active_graph.get_blast_radius(mod_file)
             if blast.get("found"):
@@ -68,8 +67,8 @@ class VerifierEngine:
         impacted_files_list = sorted(list(all_impacted_files))
 
         # 3. Read baseline files
-        baseline_files: Dict[str, str] = {}
-        current_files: Dict[str, str] = {}
+        baseline_files: dict[str, str] = {}
+        current_files: dict[str, str] = {}
 
         for rel_file in impacted_files_list:
             disk_content = self._read_file_safe(active_repo / rel_file)

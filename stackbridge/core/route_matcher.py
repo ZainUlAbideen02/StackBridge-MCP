@@ -1,7 +1,7 @@
 """Matching engine between frontend fetch calls and backend routes with AST-aware confidence scoring."""
 
 import re
-from typing import Dict, List, Optional, Tuple, Union
+
 from stackbridge.core.models import (
     BackendRoute,
     FastAPIRoute,
@@ -19,7 +19,7 @@ def normalize_fastapi_path(path: str) -> str:
     return f"^{pattern}$"
 
 
-def _split_segments(path: str) -> List[str]:
+def _split_segments(path: str) -> list[str]:
     """Splits a URL path into normalized non-empty segment tokens."""
     clean_path = path.split("?")[0].strip()
     clean_path = clean_path.strip("'\"`")
@@ -27,7 +27,7 @@ def _split_segments(path: str) -> List[str]:
     return segments
 
 
-def _is_param_segment(segment: str) -> Tuple[bool, str]:
+def _is_param_segment(segment: str) -> tuple[bool, str]:
     """Checks if a segment is a parameter placeholder (e.g. {userId}, ${userId}, :userId)."""
     seg = segment.strip()
     if (seg.startswith("{") and seg.endswith("}")) or (seg.startswith("${") and seg.endswith("}")):
@@ -39,8 +39,8 @@ def _is_param_segment(segment: str) -> Tuple[bool, str]:
 
 
 def calculate_route_confidence(
-    fe_path: str, be_path: str, fe_method: Union[HttpMethod, str], be_methods: List[Union[HttpMethod, str]]
-) -> Tuple[float, Dict[str, str]]:
+    fe_path: str, be_path: str, fe_method: HttpMethod | str, be_methods: list[HttpMethod | str]
+) -> tuple[float, dict[str, str]]:
     """
     Calculates the confidence score (0.0 to 1.0) and parameter mappings between frontend call and backend route.
     
@@ -66,8 +66,8 @@ def calculate_route_confidence(
     if not fe_segments and not be_segments:
         return 1.0, {}
 
-    segment_scores: List[float] = []
-    param_mappings: Dict[str, str] = {}
+    segment_scores: list[float] = []
+    param_mappings: dict[str, str] = {}
 
     for fe_seg, be_seg in zip(fe_segments, be_segments):
         fe_is_param, fe_param_name = _is_param_segment(fe_seg)
@@ -93,10 +93,10 @@ def calculate_route_confidence(
 
 
 def match_frontend_call_to_routes(
-    call: FrontendEndpointCall, routes: List[BackendRoute], min_confidence: float = 0.5
-) -> List[RouteMatchResult]:
+    call: FrontendEndpointCall, routes: list[BackendRoute], min_confidence: float = 0.5
+) -> list[RouteMatchResult]:
     """Matches a frontend fetch call to backend routes and ranks by confidence."""
-    matches: List[RouteMatchResult] = []
+    matches: list[RouteMatchResult] = []
 
     target_path = call.normalized_path if call.normalized_path else call.raw_url
 
@@ -105,7 +105,7 @@ def match_frontend_call_to_routes(
             fe_path=target_path,
             be_path=route.normalized_path,
             fe_method=call.http_method,
-            be_methods=route.http_methods,
+            be_methods=list(route.http_methods),
         )
 
         if confidence >= min_confidence:
@@ -145,15 +145,15 @@ def _paths_match(fetch_pattern: str, route_regex: str) -> bool:
 
 
 def match_routes(
-    fetches: List[FrontendFetchCall],
-    routes: List[FastAPIRoute],
-    api_prefix_strip: Optional[str] = "/api"
-) -> List[RouteMatchResult]:
+    fetches: list[FrontendFetchCall],
+    routes: list[FastAPIRoute],
+    api_prefix_strip: str | None = "/api"
+) -> list[RouteMatchResult]:
     """Match frontend fetch calls to backend FastAPI routes."""
-    results: List[RouteMatchResult] = []
+    results: list[RouteMatchResult] = []
     
     for fetch in fetches:
-        best_match: Optional[RouteMatchResult] = None
+        best_match: RouteMatchResult | None = None
         best_confidence = 0.0
         
         fetch_pattern = fetch.normalized_pattern
@@ -172,7 +172,7 @@ def match_routes(
             
             confidence = 0.0
             match_strategy = ""
-            notes: Optional[str] = None
+            notes: str | None = None
             
             if not fetch.is_template and not route.path_params:
                 fetch_normalized = _normalize_path_for_comparison(fetch_pattern)

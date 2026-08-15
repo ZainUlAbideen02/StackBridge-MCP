@@ -1,10 +1,9 @@
 """Parser for extracting SQLAlchemy models, fields, and relationships using Tree-sitter."""
 
-import os
 import re
-from typing import List, Optional, Tuple
-from tree_sitter import Language, Node, Parser
+
 import tree_sitter_python as tspython
+from tree_sitter import Language, Parser
 
 from stackbridge.core.models import FieldInfo, ORMField, ORMModel, SQLAlchemyModelInfo
 
@@ -16,7 +15,7 @@ class SQLAlchemyParser:
         self.py_lang = Language(tspython.language())
         self.parser = Parser(self.py_lang)
 
-    def _extract_field(self, name: str, expr_str: str) -> Optional[ORMField]:
+    def _extract_field(self, name: str, expr_str: str) -> ORMField | None:
         """Extracts ORMField details from assignment expression."""
         col_match = re.search(r"(?:Column|mapped_column)\s*\((.*?)\)", expr_str, re.DOTALL)
         if not col_match:
@@ -63,18 +62,18 @@ class SQLAlchemyParser:
             foreign_key=foreign_key,
         )
 
-    def _extract_relationship(self, expr_str: str) -> Optional[str]:
+    def _extract_relationship(self, expr_str: str) -> str | None:
         """Extracts target model name from relationship(...) call."""
         rel_match = re.search(r"""relationship\s*\(\s*["']([^"']+)["']""", expr_str)
         if rel_match:
             return rel_match.group(1)
         return None
 
-    def parse_code(self, source_code: str, file_path: str = "models.py") -> List[ORMModel]:
+    def parse_code(self, source_code: str, file_path: str = "models.py") -> list[ORMModel]:
         """Parses Python code and returns detected SQLAlchemy models."""
         source_bytes = source_code.encode("utf-8")
         tree = self.parser.parse(source_bytes)
-        models: List[ORMModel] = []
+        models: list[ORMModel] = []
 
         for node in tree.root_node.children:
             if node.type == "class_definition":
@@ -84,9 +83,9 @@ class SQLAlchemyParser:
 
                 class_name = source_bytes[name_node.start_byte:name_node.end_byte].decode("utf-8")
                 line_number = node.start_point.row + 1
-                table_name: Optional[str] = None
-                fields: List[ORMField] = []
-                relationships: List[str] = []
+                table_name: str | None = None
+                fields: list[ORMField] = []
+                relationships: list[str] = []
 
                 body = node.child_by_field_name("body")
                 if body:
@@ -125,7 +124,7 @@ class SQLAlchemyParser:
 
         return models
 
-    def parse_file(self, file_path: str) -> List[ORMModel]:
+    def parse_file(self, file_path: str) -> list[ORMModel]:
         """Parses a Python file and returns detected SQLAlchemy models."""
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -134,11 +133,11 @@ class SQLAlchemyParser:
 
 # Compatibility standalone function
 
-def extract_sqlalchemy_models(code: str, file_path: str) -> List[SQLAlchemyModelInfo]:
+def extract_sqlalchemy_models(code: str, file_path: str) -> list[SQLAlchemyModelInfo]:
     """Extract SQLAlchemy declarative models from code using Tree-sitter."""
     parser_obj = SQLAlchemyParser()
     orm_models = parser_obj.parse_code(code, file_path=file_path)
-    result: List[SQLAlchemyModelInfo] = []
+    result: list[SQLAlchemyModelInfo] = []
     for m in orm_models:
         field_infos = [
             FieldInfo(

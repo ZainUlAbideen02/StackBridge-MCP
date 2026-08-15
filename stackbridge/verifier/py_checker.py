@@ -1,13 +1,9 @@
 """Python type and schema breakage checker with baseline-diffing."""
 
-import os
-import re
-from typing import Dict, List, Optional, Set, Tuple
-from tree_sitter import Language, Node, Parser
 import tree_sitter_python as tspython
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from tree_sitter import Language, Node, Parser
 
-from stackbridge.core.models import ORMModel
 from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser
 
 
@@ -17,7 +13,7 @@ class DiagnosticError(BaseModel):
     column: int = 1
     message: str
     severity: str = "error"
-    rule: Optional[str] = "schema-attribute-missing"
+    rule: str | None = "schema-attribute-missing"
     source: str = "python"
 
     @property
@@ -37,9 +33,9 @@ class PythonTypeVerifier:
         self.parser = Parser(self.py_lang)
         self.sql_parser = SQLAlchemyParser()
 
-    def _extract_model_fields_map(self, model_files_content: Dict[str, str]) -> Dict[str, Set[str]]:
+    def _extract_model_fields_map(self, model_files_content: dict[str, str]) -> dict[str, set[str]]:
         """Maps model class name -> set of valid field and relationship names."""
-        models_map: Dict[str, Set[str]] = {}
+        models_map: dict[str, set[str]] = {}
         for file_path, content in model_files_content.items():
             models = self.sql_parser.parse_code(content, file_path=file_path)
             for m in models:
@@ -53,15 +49,15 @@ class PythonTypeVerifier:
         self,
         target_code: str,
         target_file_path: str,
-        models_map: Dict[str, Set[str]],
-    ) -> List[DiagnosticError]:
+        models_map: dict[str, set[str]],
+    ) -> list[DiagnosticError]:
         """Analyzes a Python file for missing attribute accesses against known ORM model schemas."""
         source_bytes = target_code.encode("utf-8")
         tree = self.parser.parse(source_bytes)
-        diagnostics: List[DiagnosticError] = []
+        diagnostics: list[DiagnosticError] = []
 
         # Map local variable -> Model class name (e.g., billing = db.query(BillingAccount)... -> billing: BillingAccount)
-        var_to_model: Dict[str, str] = {}
+        var_to_model: dict[str, str] = {}
 
         def find_model_instantiations_and_queries(node: Node) -> None:
             # 1. Look for assignments: var = db.query(ModelName)... or var = ModelName(...)
@@ -72,7 +68,7 @@ class PythonTypeVerifier:
                     var_name = source_bytes[left.start_byte:left.end_byte].decode("utf-8").strip()
                     right_text = source_bytes[right.start_byte:right.end_byte].decode("utf-8")
                     
-                    for model_name in models_map.keys():
+                    for model_name in models_map:
                         if f"query({model_name})" in right_text or f"select({model_name})" in right_text or f"{model_name}(" in right_text:
                             var_to_model[var_name] = model_name
 
@@ -120,14 +116,14 @@ class PythonTypeVerifier:
 
     def verify_files(
         self,
-        files: Dict[str, str],
-    ) -> List[DiagnosticError]:
+        files: dict[str, str],
+    ) -> list[DiagnosticError]:
         """Runs verification across a dictionary of {file_path: file_content}."""
         # 1. Build models map from any files defining models
         models_map = self._extract_model_fields_map(files)
 
         # 2. Verify all files against models map
-        all_diagnostics: List[DiagnosticError] = []
+        all_diagnostics: list[DiagnosticError] = []
         for file_path, content in files.items():
             diag = self.check_code(content, file_path, models_map)
             all_diagnostics.extend(diag)
@@ -136,9 +132,9 @@ class PythonTypeVerifier:
 
     def verify_with_diff(
         self,
-        current_files: Dict[str, str],
-        baseline_files: Optional[Dict[str, str]] = None,
-    ) -> List[DiagnosticError]:
+        current_files: dict[str, str],
+        baseline_files: dict[str, str] | None = None,
+    ) -> list[DiagnosticError]:
         """
         Runs baseline-diffed verification.
         Filters out pre-existing errors in baseline_files and reports only newly introduced errors.
@@ -158,5 +154,5 @@ class PythonTypeVerifier:
 
 # Backward compatibility class
 class PythonChecker(PythonTypeVerifier):
-    def check_project(self) -> List[PythonDiagnostic]:
+    def check_project(self) -> list[PythonDiagnostic]:
         return []

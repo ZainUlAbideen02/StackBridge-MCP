@@ -1,17 +1,15 @@
 """StackBridge CLI entry point."""
 
 import argparse
-import json
 import sys
 from pathlib import Path
-from typing import Optional
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.mcp_server.formatter import ContextFormatter
-from stackbridge.mcp_server.server import get_route_contract, trace_fullstack_path
+from stackbridge.mcp_server.server import trace_fullstack_path
 
 
-def run_index(repo_path: str, output: Optional[str] = None) -> int:
+def run_index(repo_path: str, output: str | None = None) -> int:
     """Builds and exports the dependency graph."""
     repo = Path(repo_path).resolve()
     print(f"Indexing repository at {repo}...")

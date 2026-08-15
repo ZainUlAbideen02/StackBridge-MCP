@@ -1,12 +1,16 @@
 """Parser for extracting FastAPI route decorators, handlers, and parameter models using Tree-sitter."""
 
-import os
 import re
-from typing import Dict, List, Optional, Set, Tuple
-from tree_sitter import Language, Node, Parser
-import tree_sitter_python as tspython
 
-from stackbridge.core.models import BackendRoute, EndpointParam, FastAPIRoute, HttpMethod
+import tree_sitter_python as tspython
+from tree_sitter import Language, Node, Parser
+
+from stackbridge.core.models import (
+    BackendRoute,
+    EndpointParam,
+    FastAPIRoute,
+    HttpMethod,
+)
 
 
 class PythonRouteParser:
@@ -16,9 +20,9 @@ class PythonRouteParser:
         self.py_lang = Language(tspython.language())
         self.parser = Parser(self.py_lang)
 
-    def _extract_router_prefixes(self, root_node: Node, source_bytes: bytes) -> Dict[str, str]:
+    def _extract_router_prefixes(self, root_node: Node, source_bytes: bytes) -> dict[str, str]:
         """Extracts router variables and prefixes, e.g. router = APIRouter(prefix='/api/v1')."""
-        prefixes: Dict[str, str] = {}
+        prefixes: dict[str, str] = {}
 
         def traverse(node: Node) -> None:
             if node.type == "assignment":
@@ -45,8 +49,8 @@ class PythonRouteParser:
         return prefixes
 
     def _parse_route_decorator(
-        self, decorator_node: Node, source_bytes: bytes, prefixes: Dict[str, str]
-    ) -> Optional[tuple[str, str, HttpMethod, Optional[str]]]:
+        self, decorator_node: Node, source_bytes: bytes, prefixes: dict[str, str]
+    ) -> tuple[str, str, HttpMethod, str | None] | None:
         """Parses @router.get("/path", response_model=...) decorator."""
         dec_text = source_bytes[decorator_node.start_byte:decorator_node.end_byte].decode("utf-8")
         
@@ -77,9 +81,9 @@ class PythonRouteParser:
 
         return raw_subpath, full_path, http_method, response_model
 
-    def _extract_orm_references_from_func(self, func_node: Node, source_bytes: bytes) -> List[str]:
+    def _extract_orm_references_from_func(self, func_node: Node, source_bytes: bytes) -> list[str]:
         """Extracts referenced ORM models (e.g. db.query(BillingAccount), select(User)) from function node."""
-        refs: Set[str] = set()
+        refs: set[str] = set()
         
         def traverse(node: Node) -> None:
             if node.type == "call":
@@ -99,19 +103,19 @@ class PythonRouteParser:
         traverse(func_node)
         return sorted(list(refs))
 
-    def parse_code(self, source_code: str, file_path: str = "routes.py") -> List[BackendRoute]:
+    def parse_code(self, source_code: str, file_path: str = "routes.py") -> list[BackendRoute]:
         """Parses Python source code string and returns detected FastAPI routes."""
         source_bytes = source_code.encode("utf-8")
         tree = self.parser.parse(source_bytes)
         prefixes = self._extract_router_prefixes(tree.root_node, source_bytes)
 
-        routes: List[BackendRoute] = []
+        routes: list[BackendRoute] = []
 
         def traverse(node: Node) -> None:
             if node.type == "decorated_definition":
                 line_number = node.start_point.row + 1
                 func_node = None
-                decorator_nodes: List[Node] = []
+                decorator_nodes: list[Node] = []
 
                 for child in node.children:
                     if child.type == "decorator":
@@ -160,7 +164,7 @@ class PythonRouteParser:
         traverse(tree.root_node)
         return routes
 
-    def parse_file(self, file_path: str) -> List[BackendRoute]:
+    def parse_file(self, file_path: str) -> list[BackendRoute]:
         """Parses a Python route file and returns detected FastAPI backend routes."""
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -169,9 +173,9 @@ class PythonRouteParser:
 
 # Compatibility standalone functions
 
-def _normalize_fastapi_path_to_regex(path: str) -> Tuple[str, List[str]]:
+def _normalize_fastapi_path_to_regex(path: str) -> tuple[str, list[str]]:
     cleaned = path.rstrip("/") if len(path) > 1 else path
-    path_params: List[str] = []
+    path_params: list[str] = []
     
     def replace_param(match: re.Match) -> str:
         param_name = match.group(1)
@@ -183,7 +187,9 @@ def _normalize_fastapi_path_to_regex(path: str) -> Tuple[str, List[str]]:
     return regex, path_params
 
 
-def _extract_decorator_info(decorator_node: Node, source_code: bytes) -> Optional[Tuple[str, str, str]]:
+def _extract_decorator_info(decorator_node: Node, source_code: bytes) -> tuple[str, str, str] | None:
+    if not decorator_node.text:
+        return None
     decorator_text = decorator_node.text.decode('utf-8')
     http_methods = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head']
     pattern = r'@(?:app|router)\.(\w+)\s*\(\s*["\']([^"\']+)["\']'
@@ -196,7 +202,7 @@ def _extract_decorator_info(decorator_node: Node, source_code: bytes) -> Optiona
     return None
 
 
-def _find_function_definition(decorator_node: Node) -> Optional[Node]:
+def _find_function_definition(decorator_node: Node) -> Node | None:
     parent = decorator_node.parent
     if not parent:
         return None
@@ -207,11 +213,11 @@ def _find_function_definition(decorator_node: Node) -> Optional[Node]:
     return None
 
 
-def extract_fastapi_routes(code: str, file_path: str) -> List[FastAPIRoute]:
+def extract_fastapi_routes(code: str, file_path: str) -> list[FastAPIRoute]:
     """Extract FastAPI route definitions from Python code using Tree-sitter."""
     parser_obj = PythonRouteParser()
     backend_routes = parser_obj.parse_code(code, file_path=file_path)
-    fastapi_routes: List[FastAPIRoute] = []
+    fastapi_routes: list[FastAPIRoute] = []
     for r in backend_routes:
         reg, pparams = _normalize_fastapi_path_to_regex(r.normalized_path)
         method_str = r.http_methods[0].value if r.http_methods else "GET"

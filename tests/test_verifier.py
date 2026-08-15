@@ -1,13 +1,12 @@
 """Tests for compiler-level verifiers, baseline diffing, and VerifierEngine."""
 
-import os
 from pathlib import Path
+
 import pytest
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.verifier.engine import VerifierEngine
 from stackbridge.verifier.py_checker import DiagnosticError, PythonTypeVerifier
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 MODELS_FIXTURE = FIXTURES_DIR / "backend" / "models.py"

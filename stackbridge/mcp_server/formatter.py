@@ -1,7 +1,7 @@
 """Context formatting and token reduction utility for LLM prompt delivery."""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class ContextFormatter:
@@ -17,9 +17,9 @@ class ContextFormatter:
     @classmethod
     def calculate_token_savings(
         cls,
-        raw_full_files: Dict[str, str],
+        raw_full_files: dict[str, str],
         compact_slice_data: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Calculates token savings between raw full source files vs. targeted compact slice."""
         raw_combined = "\n".join(raw_full_files.values())
         raw_tokens = cls.estimate_tokens(raw_combined)
@@ -41,7 +41,7 @@ class ContextFormatter:
         }
 
     @classmethod
-    def format_trace_result(cls, trace_data: Dict[str, Any]) -> str:
+    def format_trace_result(cls, trace_data: dict[str, Any]) -> str:
         """Formats a fullstack trace result into markdown for AI context injection."""
         lines = [
             f"### Full-Stack Dependency Trace: `{trace_data.get('target', 'unknown')}`",
@@ -65,7 +65,7 @@ class ContextFormatter:
         return "\n".join(lines)
 
     @classmethod
-    def format_route_contract(cls, contract_data: Dict[str, Any]) -> str:
+    def format_route_contract(cls, contract_data: dict[str, Any]) -> str:
         """Formats an endpoint contract and linked frontend callers."""
         lines = [
             f"### Route Contract: `{contract_data.get('route_path', 'unknown')}`",

@@ -1,13 +1,12 @@
 """Tests for SQLAlchemy parser, StackGraph unified repo builder, blast radius analysis, and caching."""
 
-import json
-import os
 from pathlib import Path
-import pytest
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser, extract_sqlalchemy_models
-
+from stackbridge.parsers.sqlalchemy_parser import (
+    SQLAlchemyParser,
+    extract_sqlalchemy_models,
+)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 MODELS_FIXTURE = FIXTURES_DIR / "backend" / "models.py"

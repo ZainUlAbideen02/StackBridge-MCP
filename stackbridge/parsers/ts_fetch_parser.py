@@ -2,9 +2,9 @@
 
 import os
 import re
-from typing import List, Optional, Tuple
-from tree_sitter import Language, Node, Parser
+
 import tree_sitter_typescript as tstypescript
+from tree_sitter import Language, Node, Parser
 
 from stackbridge.core.models import FrontendEndpointCall, FrontendFetchCall, HttpMethod
 
@@ -41,12 +41,12 @@ class TypeScriptFetchParser:
                                 pass
         return HttpMethod.GET
 
-    def _extract_template_string_info(self, template_node: Node, source_bytes: bytes) -> Tuple[str, str, List[str]]:
+    def _extract_template_string_info(self, template_node: Node, source_bytes: bytes) -> tuple[str, str, list[str]]:
         """Extracts raw string, normalized path, and parameter names from template literal."""
         raw_text = source_bytes[template_node.start_byte:template_node.end_byte].decode("utf-8")
         
-        normalized_parts: List[str] = []
-        path_params: List[str] = []
+        normalized_parts: list[str] = []
+        path_params: list[str] = []
 
         for child in template_node.children:
             if child.type == "string_fragment":
@@ -69,12 +69,12 @@ class TypeScriptFetchParser:
         normalized_path = "".join(normalized_parts)
         return raw_text, normalized_path, path_params
 
-    def parse_code(self, source_code: str, file_path: str = "component.tsx") -> List[FrontendEndpointCall]:
+    def parse_code(self, source_code: str, file_path: str = "component.tsx") -> list[FrontendEndpointCall]:
         """Parses TypeScript/TSX code string and returns detected frontend endpoint calls."""
         parser = self._get_parser_for_file(file_path)
         source_bytes = source_code.encode("utf-8")
         tree = parser.parse(source_bytes)
-        calls: List[FrontendEndpointCall] = []
+        calls: list[FrontendEndpointCall] = []
 
         def traverse(node: Node) -> None:
             if node.type == "call_expression":
@@ -127,7 +127,7 @@ class TypeScriptFetchParser:
         traverse(tree.root_node)
         return calls
 
-    def parse_file(self, file_path: str) -> List[FrontendEndpointCall]:
+    def parse_file(self, file_path: str) -> list[FrontendEndpointCall]:
         """Parses a TypeScript/TSX file from filesystem and returns detected frontend endpoint calls."""
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -136,7 +136,7 @@ class TypeScriptFetchParser:
 
 # Compatibility helper functions
 
-def _extract_path_params_from_template(template_str: str) -> Tuple[str, List[str]]:
+def _extract_path_params_from_template(template_str: str) -> tuple[str, list[str]]:
     param_pattern = r'\$\{([^}]+)\}'
     params = []
     
@@ -150,8 +150,8 @@ def _extract_path_params_from_template(template_str: str) -> Tuple[str, List[str
     return normalized, params
 
 
-def _parse_string_node(node: Node, source_code: bytes) -> Optional[str]:
-    if node.type == 'string':
+def _parse_string_node(node: Node, source_code: bytes) -> str | None:
+    if node.type == 'string' and node.text is not None:
         content = node.text.decode('utf-8')
         if (content.startswith("'") and content.endswith("'")) or \
            (content.startswith('"') and content.endswith('"')):
@@ -164,7 +164,7 @@ def _extract_http_method_from_options(options_node: Node, source_code: bytes) ->
         if child.type == 'pair':
             key_node = child.child_by_field_name('key')
             value_node = child.child_by_field_name('value')
-            if key_node and value_node:
+            if key_node and value_node and key_node.text and value_node.text:
                 key_text = key_node.text.decode('utf-8').strip().strip('"\'')
                 if key_text.lower() == 'method':
                     value_text = value_node.text.decode('utf-8').strip().strip('"\'')
@@ -172,11 +172,11 @@ def _extract_http_method_from_options(options_node: Node, source_code: bytes) ->
     return "GET"
 
 
-def extract_nextjs_fetches(code: str, file_path: str) -> List[FrontendFetchCall]:
+def extract_nextjs_fetches(code: str, file_path: str) -> list[FrontendFetchCall]:
     """Extract fetch() calls from TypeScript/TSX code using Tree-sitter."""
     parser_obj = TypeScriptFetchParser()
     calls = parser_obj.parse_code(code, file_path=file_path)
-    fetches: List[FrontendFetchCall] = []
+    fetches: list[FrontendFetchCall] = []
     for c in calls:
         method_str = c.http_method.value if isinstance(c.http_method, HttpMethod) else str(c.http_method)
         fetches.append(

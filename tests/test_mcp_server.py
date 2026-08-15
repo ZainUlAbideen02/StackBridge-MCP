@@ -1,16 +1,13 @@
 """Tests for MCP server tools, ContextFormatter token savings, and CLI entry points."""
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-import pytest
 
 from stackbridge.main import run_index, run_trace
 from stackbridge.mcp_server.formatter import ContextFormatter
 from stackbridge.mcp_server.server import get_route_contract, trace_fullstack_path
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 
@@ -73,7 +70,7 @@ def test_mcp_tool_get_route_contract_static_route():
 
     assert result["found"] is True
     assert result["handler_name"] == "get_teams"
-    assert result["response_model"] == "List[TeamOut]"
+    assert result["response_model"] == "list[TeamOut]"
     assert len(result["linked_callers"]) == 1
     assert result["linked_callers"][0]["confidence"] == 1.0
 

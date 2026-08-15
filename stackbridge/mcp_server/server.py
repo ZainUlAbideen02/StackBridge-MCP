@@ -1,27 +1,24 @@
 """FastMCP / MCPServer exposing StackBridge tools and resources for AI pair programming."""
 
 import os
-import re
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import FastMCP # type: ignore
     mcp = FastMCP("stackbridge")
 except (ImportError, ModuleNotFoundError):
     try:
-        from mcp.server.mcpserver import MCPServer
+        from mcp.server.mcpserver import MCPServer # type: ignore
         mcp = MCPServer("stackbridge")
     except (ImportError, ModuleNotFoundError):
         from mcp.server import Server
         mcp = Server("stackbridge")
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.mcp_server.formatter import ContextFormatter
 from stackbridge.verifier.engine import VerifierEngine
 
 
-def _get_status_codes_from_file(file_path: str, function_name: str) -> List[int]:
+def _get_status_codes_from_file(file_path: str, function_name: str) -> list[int]:
     """Inspects route handler file for status codes (e.g. status.HTTP_404_NOT_FOUND, 200)."""
     codes = [200]
     if os.path.exists(file_path):
@@ -44,7 +41,7 @@ def _get_status_codes_from_file(file_path: str, function_name: str) -> List[int]
 
 
 @mcp.tool()
-def trace_fullstack_path(repo_path: str, target: str) -> Dict[str, Any]:
+def trace_fullstack_path(repo_path: str, target: str) -> dict[str, Any]:
     """
     Traces fullstack dependency chain across Frontend, API Routes, and SQLAlchemy ORM models.
     
@@ -54,7 +51,7 @@ def trace_fullstack_path(repo_path: str, target: str) -> Dict[str, Any]:
     blast = graph.get_blast_radius(target)
 
     # Build formatted chains
-    formatted_chains: List[List[str]] = []
+    formatted_chains: list[list[str]] = []
     for path in blast.get("paths", []):
         fe_part = next((os.path.basename(n.split("::")[0]) for n in path if "frontend" in n or ".tsx" in n or ".ts" in n), None)
         be_route_node = next((n for n in path if "routes.py" in n or "api" in n), None)
@@ -99,7 +96,7 @@ def trace_fullstack_path(repo_path: str, target: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def get_route_contract(repo_path: str, route_path: str) -> Dict[str, Any]:
+def get_route_contract(repo_path: str, route_path: str) -> dict[str, Any]:
     """
     Extracts the API contract for a route, including HTTP method, status codes, response model,
     and all linked frontend fetch callers with confidence scores.
@@ -127,7 +124,7 @@ def get_route_contract(repo_path: str, route_path: str) -> Dict[str, Any]:
         }
 
     # Find linked frontend callers
-    linked_callers: List[Dict[str, Any]] = []
+    linked_callers: list[dict[str, Any]] = []
     for src, tgt, edge_data in graph.graph.edges(data=True):
         if tgt == matching_route_id and edge_data.get("relation") == "calls":
             src_data = graph.graph.nodes.get(src, {})
@@ -141,11 +138,15 @@ def get_route_contract(repo_path: str, route_path: str) -> Dict[str, Any]:
             })
 
     # Find models accessed
-    models_accessed: List[str] = []
+    models_accessed: list[str] = []
     for src, tgt, edge_data in graph.graph.edges(data=True):
         if src == matching_route_id and edge_data.get("relation") == "accesses":
             model_data = graph.graph.nodes.get(tgt, {})
             models_accessed.append(model_data.get("class_name", tgt.split("::")[-1]))
+
+    # Ensure route_node_data is not None before calling get
+    if not route_node_data:
+        route_node_data = {}
 
     file_path = os.path.join(repo_path, route_node_data.get("file_path", ""))
     status_codes = _get_status_codes_from_file(file_path, route_node_data.get("function_name", ""))
@@ -173,7 +174,7 @@ def get_route_contract(repo_path: str, route_path: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def verify_breakage(repo_path: str, modified_files: Dict[str, str]) -> Dict[str, Any]:
+def verify_breakage(repo_path: str, modified_files: dict[str, str]) -> dict[str, Any]:
     """Runs compiler and schema verification across all files impacted by a change."""
     engine = VerifierEngine(repo_path=repo_path)
     report = engine.verify_impacted_files(modified_files=modified_files, repo_path=repo_path)

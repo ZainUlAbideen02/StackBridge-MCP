@@ -1,16 +1,16 @@
 """Benchmarking runner for AST parsing, Graph construction, blast radius traversal, and token efficiency."""
 
-import json
 import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.mcp_server.formatter import ContextFormatter
-from stackbridge.mcp_server.server import get_route_contract, trace_fullstack_path
+from stackbridge.mcp_server.server import get_route_contract
 from stackbridge.verifier.engine import VerifierEngine
 
 
@@ -18,14 +18,14 @@ class BenchmarkResult(BaseModel):
     name: str
     execution_time_ms: float
     status: str = "passed"
-    metrics: Dict[str, Any] = Field(default_factory=dict)
-    details: Optional[str] = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
+    details: str | None = None
 
 
 class BenchmarkSuite:
     """Runs performance, accuracy, and token reduction benchmarks for StackBridge."""
 
-    def __init__(self, repo_path: Optional[str] = None) -> None:
+    def __init__(self, repo_path: str | None = None) -> None:
         if repo_path:
             self.repo_path = Path(repo_path).resolve()
         else:
@@ -73,7 +73,7 @@ class BenchmarkSuite:
     def benchmark_token_reduction(self) -> BenchmarkResult:
         """Measures token savings achieved by compact full-stack context slices."""
         # Read full files from fixture
-        raw_files: Dict[str, str] = {}
+        raw_files: dict[str, str] = {}
         for root, _, files in os.walk(self.repo_path):
             for f in files:
                 ext = os.path.splitext(f)[1]
@@ -125,7 +125,7 @@ class BenchmarkSuite:
             details=f"Verified {len(report.impacted_files)} impacted files in {elapsed_ms:.2f}ms with {report.error_count} breakage diagnostics detected",
         )
 
-    def run_all(self) -> Dict[str, Any]:
+    def run_all(self) -> dict[str, Any]:
         """Runs all benchmarks in the suite and returns aggregated metrics."""
         results = [
             self.benchmark_graph_construction(),
@@ -147,7 +147,7 @@ class BenchmarkSuite:
         }
 
 
-def print_benchmark_report(summary: Dict[str, Any]) -> None:
+def print_benchmark_report(summary: dict[str, Any]) -> None:
     """Prints a formatted benchmark summary table to stdout."""
     print("=" * 80)
     print(f"  {summary['suite']}")

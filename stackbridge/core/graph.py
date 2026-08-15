@@ -3,7 +3,8 @@
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Optional
+
 import networkx as nx
 
 from stackbridge.core.models import (
@@ -13,8 +14,6 @@ from stackbridge.core.models import (
     GraphNode,
     HttpMethod,
     ORMModel,
-    RouteMatchResult,
-    StackGraphExport,
 )
 from stackbridge.core.route_matcher import match_frontend_call_to_routes
 from stackbridge.parsers.py_route_parser import PythonRouteParser
@@ -26,14 +25,14 @@ class StackGraph:
     """Unified full-stack dependency graph across Next.js, FastAPI, and SQLAlchemy."""
 
     def __init__(self) -> None:
-        self.graph = nx.DiGraph()
-        self.frontend_calls: Dict[str, FrontendEndpointCall] = {}
-        self.backend_routes: Dict[str, BackendRoute] = {}
-        self.orm_models: Dict[str, ORMModel] = {}
-        self._node_index: Dict[str, GraphNode] = {}
-        self._edge_list: List[GraphEdge] = []
+        self.graph: nx.DiGraph = nx.DiGraph()
+        self.frontend_calls: dict[str, FrontendEndpointCall] = {}
+        self.backend_routes: dict[str, BackendRoute] = {}
+        self.orm_models: dict[str, ORMModel] = {}
+        self._node_index: dict[str, GraphNode] = {}
+        self._edge_list: list[GraphEdge] = []
 
-    def _normalize_path(self, path: Union[str, Path], base_dir: Optional[Union[str, Path]] = None) -> str:
+    def _normalize_path(self, path: str | Path, base_dir: str | Path | None = None) -> str:
         p_str = str(path).replace("\\", "/")
         if base_dir:
             b_str = str(base_dir).replace("\\", "/").rstrip("/")
@@ -49,7 +48,7 @@ class StackGraph:
     def edge_count(self) -> int:
         return self.graph.number_of_edges()
 
-    def get_node(self, node_id: str) -> Optional[GraphNode]:
+    def get_node(self, node_id: str) -> GraphNode | None:
         return self._node_index.get(node_id)
 
     def add_node(self, node: GraphNode) -> None:
@@ -66,7 +65,7 @@ class StackGraph:
         )
         self._edge_list.append(edge)
 
-    def add_frontend_call(self, call: FrontendEndpointCall, base_dir: Optional[str] = None) -> str:
+    def add_frontend_call(self, call: FrontendEndpointCall, base_dir: str | None = None) -> str:
         rel_path = self._normalize_path(call.file_path, base_dir)
         node_id = f"{rel_path}::fetch::{call.line_number}"
         self.frontend_calls[node_id] = call
@@ -86,7 +85,7 @@ class StackGraph:
         )
         return node_id
 
-    def add_backend_route(self, route: BackendRoute, base_dir: Optional[str] = None) -> str:
+    def add_backend_route(self, route: BackendRoute, base_dir: str | None = None) -> str:
         rel_path = self._normalize_path(route.file_path, base_dir)
         node_id = f"{rel_path}::{route.function_name}"
         self.backend_routes[node_id] = route
@@ -107,7 +106,7 @@ class StackGraph:
         )
         return node_id
 
-    def add_orm_model(self, model: ORMModel, base_dir: Optional[str] = None) -> str:
+    def add_orm_model(self, model: ORMModel, base_dir: str | None = None) -> str:
         rel_path = self._normalize_path(model.file_path, base_dir)
         node_id = f"{rel_path}::{model.class_name}"
         self.orm_models[node_id] = model
@@ -128,7 +127,7 @@ class StackGraph:
         return node_id
 
     def link_frontend_to_route(
-        self, fe_node_id: str, route_node_id: str, confidence: float, is_exact: bool, param_mappings: Dict[str, str]
+        self, fe_node_id: str, route_node_id: str, confidence: float, is_exact: bool, param_mappings: dict[str, str]
     ) -> None:
         self.graph.add_edge(
             fe_node_id,
@@ -157,7 +156,7 @@ class StackGraph:
         )
 
     @classmethod
-    def build_from_repo(cls, repo_path: Union[str, Path], api_prefix_strip: Optional[str] = None) -> "StackGraph":
+    def build_from_repo(cls, repo_path: str | Path, api_prefix_strip: str | None = None) -> "StackGraph":
         """Scans a repository, parses TypeScript, Python FastAPI routes, and SQLAlchemy models, and builds graph."""
         sg = cls()
         repo_dir = Path(repo_path).resolve()
@@ -166,9 +165,9 @@ class StackGraph:
         py_route_parser = PythonRouteParser()
         sql_parser = SQLAlchemyParser()
 
-        parsed_fe_calls: List[tuple[str, FrontendEndpointCall]] = []
-        parsed_routes: List[tuple[str, BackendRoute]] = []
-        parsed_models: List[tuple[str, ORMModel]] = []
+        parsed_fe_calls: list[tuple[str, FrontendEndpointCall]] = []
+        parsed_routes: list[tuple[str, BackendRoute]] = []
+        parsed_models: list[tuple[str, ORMModel]] = []
 
         for root, dirs, files in os.walk(repo_dir):
             dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache")]
@@ -215,13 +214,13 @@ class StackGraph:
             matches = match_frontend_call_to_routes(fe_call, all_backend_routes, min_confidence=0.5)
             for match in matches:
                 target_route = match.backend_route
-                r_id = route_func_to_id.get(f"{target_route.file_path}::{target_route.function_name}")
-                if not r_id:
-                    r_id = route_to_id.get(target_route.normalized_path)
-                if r_id:
+                match_id = route_func_to_id.get(f"{target_route.file_path}::{target_route.function_name}")
+                if not match_id:
+                    match_id = route_to_id.get(target_route.normalized_path)
+                if match_id:
                     sg.link_frontend_to_route(
                         fe_node_id=fe_id,
-                        route_node_id=r_id,
+                        route_node_id=match_id,
                         confidence=match.confidence,
                         is_exact=match.is_exact,
                         param_mappings=match.param_mappings,
@@ -240,7 +239,7 @@ class StackGraph:
 
         return sg
 
-    def _resolve_target_node(self, target_identifier: str) -> Optional[str]:
+    def _resolve_target_node(self, target_identifier: str) -> str | None:
         target_clean = target_identifier.replace("\\", "/")
         if target_clean in self.graph.nodes:
             return target_clean
@@ -255,7 +254,7 @@ class StackGraph:
 
         return None
 
-    def get_blast_radius(self, target_identifier: str, depth: int = 5) -> Dict[str, Any]:
+    def get_blast_radius(self, target_identifier: str, depth: int = 5) -> dict[str, Any]:
         """
         Traces full-stack blast radius of a change at target_identifier (e.g. 'backend/models.py::BillingAccount').
         Traces upstream routes and frontend callers.
@@ -272,11 +271,11 @@ class StackGraph:
                 "paths": [],
             }
 
-        affected_nodes: Set[str] = set()
-        affected_routes: List[Dict[str, Any]] = []
-        affected_frontend: List[Dict[str, Any]] = []
-        affected_files: Set[str] = set()
-        paths: List[List[str]] = []
+        affected_nodes: set[str] = set()
+        affected_routes: list[dict[str, Any]] = []
+        affected_frontend: list[dict[str, Any]] = []
+        affected_files: set[str] = set()
+        paths: list[list[str]] = []
 
         undirected = self.graph.to_undirected()
         visited = set([target_node])
@@ -320,7 +319,7 @@ class StackGraph:
             "paths": paths,
         }
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         nodes_data = []
         for n, d in self.graph.nodes(data=True):
             clean_d = {k: v for k, v in d.items() if k != "data"}
@@ -341,7 +340,7 @@ class StackGraph:
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent)
 
-    def export_json(self, file_path: Optional[Union[str, Path]] = None) -> str:
+    def export_json(self, file_path: str | Path | None = None) -> str:
         json_output = self.to_json()
         if file_path:
             p = Path(file_path)
@@ -352,7 +351,7 @@ class StackGraph:
         return json_output
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "StackGraph":
+    def from_dict(cls, data: dict[str, Any]) -> "StackGraph":
         sg = cls()
         for n in data.get("nodes", []):
             node_id = n["id"]
@@ -372,15 +371,15 @@ class StackGraph:
         return cls.from_dict(json.loads(json_str))
 
     @classmethod
-    def load_json(cls, file_path: Union[str, Path]) -> "StackGraph":
+    def load_json(cls, file_path: str | Path) -> "StackGraph":
         with open(file_path, "r", encoding="utf-8") as f:
             return cls.from_json(f.read())
 
-    def save_cache(self, cache_path: Union[str, Path] = ".stackbridge_cache.json") -> None:
+    def save_cache(self, cache_path: str | Path = ".stackbridge_cache.json") -> None:
         self.export_json(cache_path)
 
     @classmethod
-    def load_cache(cls, cache_path: Union[str, Path] = ".stackbridge_cache.json") -> Optional["StackGraph"]:
+    def load_cache(cls, cache_path: str | Path = ".stackbridge_cache.json") -> Optional["StackGraph"]:
         if os.path.exists(cache_path):
             try:
                 return cls.load_json(cache_path)

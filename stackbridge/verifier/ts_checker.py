@@ -1,8 +1,5 @@
 """TypeScript and Next.js frontend breakage checker with baseline-diffing."""
 
-import os
-from typing import Dict, List, Optional, Set
-from pydantic import BaseModel
 
 from stackbridge.parsers.ts_fetch_parser import TypeScriptFetchParser
 from stackbridge.verifier.py_checker import DiagnosticError
@@ -22,10 +19,10 @@ class TypeScriptTypeVerifier:
         self,
         target_code: str,
         target_file_path: str,
-        known_routes: Set[str],
-    ) -> List[DiagnosticError]:
+        known_routes: set[str],
+    ) -> list[DiagnosticError]:
         calls = self.ts_parser.parse_code(target_code, file_path=target_file_path)
-        diagnostics: List[DiagnosticError] = []
+        diagnostics: list[DiagnosticError] = []
 
         for call in calls:
             # If known routes are provided, check if route exists
@@ -45,10 +42,10 @@ class TypeScriptTypeVerifier:
 
     def verify_files(
         self,
-        files: Dict[str, str],
-        known_routes: Optional[Set[str]] = None,
-    ) -> List[DiagnosticError]:
-        all_diags: List[DiagnosticError] = []
+        files: dict[str, str],
+        known_routes: set[str] | None = None,
+    ) -> list[DiagnosticError]:
+        all_diags: list[DiagnosticError] = []
         routes = known_routes or set()
         for file_path, content in files.items():
             if file_path.endswith((".ts", ".tsx", ".js", ".jsx")):
@@ -57,10 +54,10 @@ class TypeScriptTypeVerifier:
 
     def verify_with_diff(
         self,
-        current_files: Dict[str, str],
-        baseline_files: Optional[Dict[str, str]] = None,
-        known_routes: Optional[Set[str]] = None,
-    ) -> List[DiagnosticError]:
+        current_files: dict[str, str],
+        baseline_files: dict[str, str] | None = None,
+        known_routes: set[str] | None = None,
+    ) -> list[DiagnosticError]:
         current_diags = self.verify_files(current_files, known_routes=known_routes)
         if not baseline_files:
             return current_diags
@@ -73,9 +70,9 @@ class TypeScriptTypeVerifier:
 
 # Backward compatibility
 class TypeScriptChecker(TypeScriptTypeVerifier):
-    def __init__(self, tsconfig_path: Optional[str] = None) -> None:
+    def __init__(self, tsconfig_path: str | None = None) -> None:
         super().__init__()
         self.tsconfig_path = tsconfig_path
 
-    def check_project(self) -> List[TypeScriptDiagnostic]:
+    def check_project(self) -> list[TypeScriptDiagnostic]:
         return []
