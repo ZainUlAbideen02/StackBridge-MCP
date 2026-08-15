@@ -30,6 +30,7 @@ class FrontendEndpointCall(BaseModel):
     http_method: HttpMethod = HttpMethod.GET
     path_params: List[str] = Field(default_factory=list)
     query_params: List[str] = Field(default_factory=list)
+    is_template: bool = False
     body_type: Optional[str] = None
 
 
@@ -45,6 +46,14 @@ class BackendRoute(BaseModel):
     request_model: Optional[str] = None
     response_model: Optional[str] = None
     orm_models_referenced: List[str] = Field(default_factory=list)
+
+
+class RouteMatchResult(BaseModel):
+    frontend_call: FrontendEndpointCall
+    backend_route: BackendRoute
+    confidence: float
+    is_exact: bool = False
+    param_mappings: Dict[str, str] = Field(default_factory=dict)
 
 
 class ORMField(BaseModel):
