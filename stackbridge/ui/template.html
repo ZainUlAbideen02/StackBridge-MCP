@@ -6,22 +6,23 @@
   <title>StackBridge - Fullstack Dependency Visualizer</title>
   <style>
     :root {
-      --bg-dark: #0f172a;
-      --bg-panel: #1e293b;
-      --bg-card: #334155;
+      --bg-dark: #090d16;
+      --bg-panel: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #334155;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --accent-fe: #38bdf8;
       --accent-be: #34d399;
       --accent-db: #f59e0b;
-      --accent-blast: #ef4444;
-      --border-color: #475569;
+      --accent-blast: #f43f5e;
+      --border-color: #334155;
     }
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
     }
     body {
       background-color: var(--bg-dark);
@@ -34,37 +35,52 @@
     header {
       background-color: var(--bg-panel);
       border-bottom: 1px solid var(--border-color);
-      padding: 12px 24px;
+      padding: 14px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
-    .logo {
+    .logo-container {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 1.25rem;
+      gap: 12px;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      color: #0f172a;
+      font-weight: 800;
+      font-size: 0.9rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .logo-title {
+      font-size: 1.2rem;
       font-weight: 700;
       color: var(--text-main);
     }
-    .logo span {
+    .logo-title span {
       color: var(--accent-fe);
     }
     .stats-bar {
       display: flex;
-      gap: 16px;
+      gap: 12px;
+      align-items: center;
     }
     .stat-pill {
       background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
       padding: 6px 14px;
       border-radius: 9999px;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       display: flex;
       gap: 6px;
+      color: var(--text-muted);
     }
     .stat-value {
       font-weight: 700;
-      color: var(--accent-fe);
+      color: var(--text-main);
     }
     .main-container {
       display: flex;
@@ -72,13 +88,13 @@
       height: calc(100vh - 65px);
     }
     .sidebar {
-      width: 340px;
+      width: 360px;
       background-color: var(--bg-panel);
       border-right: 1px solid var(--border-color);
       padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       overflow-y: auto;
     }
     .search-input {
@@ -86,74 +102,162 @@
       background-color: var(--bg-dark);
       border: 1px solid var(--border-color);
       color: var(--text-main);
-      padding: 8px 12px;
-      border-radius: 6px;
+      padding: 10px 14px;
+      border-radius: 8px;
       outline: none;
+      font-size: 0.88rem;
+      transition: border-color 0.2s;
     }
     .search-input:focus {
       border-color: var(--accent-fe);
     }
     .filter-group {
       display: flex;
-      gap: 8px;
+      gap: 6px;
     }
     .filter-btn {
       flex: 1;
-      padding: 6px 10px;
+      padding: 6px 8px;
       border-radius: 6px;
       border: 1px solid var(--border-color);
       background-color: var(--bg-card);
-      color: var(--text-main);
+      color: var(--text-muted);
       cursor: pointer;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .filter-btn:hover {
+      background-color: var(--bg-card-hover);
+      color: var(--text-main);
     }
     .filter-btn.active {
       background-color: var(--accent-fe);
-      color: var(--bg-dark);
-      font-weight: 600;
+      color: #0f172a;
+      border-color: var(--accent-fe);
     }
     .blast-card {
       background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       padding: 14px;
       display: flex;
       flex-direction: column;
       gap: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .blast-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .blast-title {
-      font-size: 0.9rem;
-      font-weight: 600;
+      font-size: 0.85rem;
+      font-weight: 700;
       color: var(--accent-blast);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .node-item {
+      padding: 10px 12px;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .node-item:hover {
+      background-color: var(--bg-card-hover);
+      transform: translateX(2px);
+    }
+    .node-item.selected {
+      border-color: var(--accent-blast);
+      box-shadow: 0 0 10px rgba(244, 63, 94, 0.3);
+    }
+    .node-item.blast-affected {
+      border-color: var(--accent-blast);
+      background-color: rgba(244, 63, 94, 0.1);
+    }
+    .node-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .node-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .node-tag.frontend { background-color: rgba(56, 189, 248, 0.2); color: var(--accent-fe); }
+    .node-tag.route { background-color: rgba(52, 211, 153, 0.2); color: var(--accent-be); }
+    .node-tag.model { background-color: rgba(245, 158, 11, 0.2); color: var(--accent-db); }
+    .node-label-text {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text-main);
+      word-break: break-all;
+    }
+    .node-subtext {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      word-break: break-all;
     }
     .graph-viewport {
       flex: 1;
       position: relative;
-      background-color: var(--bg-dark);
+      background: radial-gradient(circle at center, #131d31 0%, #090d16 100%);
       overflow: hidden;
     }
     #graphCanvas {
       width: 100%;
       height: 100%;
       display: block;
+      cursor: grab;
+    }
+    .column-header-container {
+      position: absolute;
+      top: 14px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-around;
+      pointer-events: none;
+    }
+    .column-header {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-color);
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      backdrop-filter: blur(4px);
     }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo">
-      <span>StackBridge</span> Visualizer
+    <div class="logo-container">
+      <div class="logo-badge">MCP</div>
+      <div class="logo-title"><span>StackBridge</span> Visualizer</div>
     </div>
     <div class="stats-bar">
       <div class="stat-pill">Nodes: <span class="stat-value" id="nodeCount">0</span></div>
       <div class="stat-pill">Edges: <span class="stat-value" id="edgeCount">0</span></div>
-      <div class="stat-pill">Frontend Calls: <span class="stat-value" id="feCount">0</span></div>
-      <div class="stat-pill">API Routes: <span class="stat-value" id="beCount">0</span></div>
+      <div class="stat-pill">Frontend: <span class="stat-value" id="feCount" style="color:var(--accent-fe)">0</span></div>
+      <div class="stat-pill">Routes: <span class="stat-value" id="beCount" style="color:var(--accent-be)">0</span></div>
+      <div class="stat-pill">Models: <span class="stat-value" id="dbCount" style="color:var(--accent-db)">0</span></div>
     </div>
   </header>
 
   <div class="main-container">
     <aside class="sidebar">
-      <input type="text" id="searchInput" class="search-input" placeholder="Search node or route path..." />
+      <input type="text" id="searchInput" class="search-input" placeholder="Search route, component, or model..." />
       <div class="filter-group">
         <button class="filter-btn active" data-filter="all">All</button>
         <button class="filter-btn" data-filter="frontend">Frontend</button>
@@ -162,100 +266,330 @@
       </div>
 
       <div class="blast-card" id="blastRadiusPanel">
-        <div class="blast-title">Blast Radius Inspector</div>
-        <div id="blastDetails" style="font-size: 0.85rem; color: var(--text-muted);">
-          Select a node in the graph or table to calculate full-stack downstream blast radius.
+        <div class="blast-header">
+          <div class="blast-title">Blast Radius Inspector</div>
+        </div>
+        <div id="blastDetails" style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.5;">
+          Click any node on the graph or in the list to calculate cross-stack blast radius.
         </div>
       </div>
 
-      <div id="nodeList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      <div id="nodeList" style="display: flex; flex-direction: column; gap: 8px; flex: 1;"></div>
     </aside>
 
     <main class="graph-viewport">
+      <div class="column-header-container">
+        <div class="column-header" style="color: var(--accent-fe);">Next.js / React Frontend</div>
+        <div class="column-header" style="color: var(--accent-be);">FastAPI Backend Routes</div>
+        <div class="column-header" style="color: var(--accent-db);">SQLAlchemy Models</div>
+      </div>
       <canvas id="graphCanvas"></canvas>
     </main>
   </div>
 
   <script>
-    let graphData = { nodes: [], edges: [], metrics: {} };
+    let rawGraph = { nodes: [], edges: [], metrics: {} };
+    let selectedNodeId = null;
+    let blastResult = null;
+    let activeFilter = 'all';
+    let searchQuery = '';
+    let nodePositions = {};
+
+    function formatNodeLabel(node) {
+      if (!node) return "";
+      const type = node.type || node.node_type;
+      if (type === 'frontend' || type === 'frontend_component') {
+        const file = (node.file_path || node.id || "").split('/').pop().split('\\').pop();
+        const line = node.line || node.line_number || "1";
+        return `${file}:L${line}`;
+      } else if (type === 'route' || type === 'api_route') {
+        const method = (node.http_methods && node.http_methods[0]) || node.http_method || "GET";
+        const path = node.normalized_path || node.raw_path || node.route_path || node.id.split('::').pop();
+        return `${method} ${path}`;
+      } else if (type === 'model' || type === 'schema_model') {
+        const name = node.class_name || node.table_name || node.id.split('::').pop();
+        return `Model: ${name}`;
+      }
+      return node.id;
+    }
+
+    function formatNodeSubtext(node) {
+      if (!node) return "";
+      const type = node.type || node.node_type;
+      if (type === 'frontend') {
+        return `${node.http_method || 'GET'} ${node.normalized_path || node.raw_url || ''}`;
+      } else if (type === 'route') {
+        return `Handler: ${node.function_name || node.handler_name || 'route_fn'}`;
+      } else if (type === 'model') {
+        return `Table: ${node.table_name || 'table'}`;
+      }
+      return node.file_path || "";
+    }
 
     async function loadGraph() {
       try {
         const res = await fetch('/api/graph');
-        graphData = await res.json();
+        rawGraph = await res.json();
         renderMetrics();
         renderNodeList();
+        computeLayout();
         renderCanvas();
       } catch (err) {
-        console.error("Failed to load graph data:", err);
+        console.error("Failed to load graph:", err);
       }
     }
 
     function renderMetrics() {
-      document.getElementById('nodeCount').textContent = graphData.nodes ? graphData.nodes.length : 0;
-      document.getElementById('edgeCount').textContent = graphData.edges ? graphData.edges.length : 0;
-      const fe = (graphData.nodes || []).filter(n => n.type === 'frontend').length;
-      const be = (graphData.nodes || []).filter(n => n.type === 'route').length;
+      const nodes = rawGraph.nodes || [];
+      const edges = rawGraph.edges || [];
+      document.getElementById('nodeCount').textContent = nodes.length;
+      document.getElementById('edgeCount').textContent = edges.length;
+      
+      const fe = nodes.filter(n => (n.type === 'frontend' || n.node_type === 'frontend_component')).length;
+      const be = nodes.filter(n => (n.type === 'route' || n.node_type === 'api_route')).length;
+      const db = nodes.filter(n => (n.type === 'model' || n.node_type === 'schema_model')).length;
+
       document.getElementById('feCount').textContent = fe;
       document.getElementById('beCount').textContent = be;
+      document.getElementById('dbCount').textContent = db;
     }
 
     function renderNodeList() {
       const container = document.getElementById('nodeList');
       container.innerHTML = '';
-      (graphData.nodes || []).forEach(node => {
+
+      const nodes = (rawGraph.nodes || []).filter(n => {
+        const type = n.type || n.node_type || '';
+        const matchesFilter = (activeFilter === 'all') || (type.includes(activeFilter));
+        const label = formatNodeLabel(n).toLowerCase();
+        const sub = formatNodeSubtext(n).toLowerCase();
+        const matchesSearch = !searchQuery || label.includes(searchQuery) || sub.includes(searchQuery);
+        return matchesFilter && matchesSearch;
+      });
+
+      nodes.forEach(node => {
         const item = document.createElement('div');
-        item.style.padding = '8px';
-        item.style.background = 'var(--bg-card)';
-        item.style.borderRadius = '6px';
-        item.style.cursor = 'pointer';
-        item.style.fontSize = '0.85rem';
-        item.textContent = `${node.type.toUpperCase()}: ${node.id}`;
-        item.onclick = () => inspectBlastRadius(node.id);
+        item.className = `node-item ${selectedNodeId === node.id ? 'selected' : ''}`;
+        if (blastResult && (blastResult.affected_nodes || []).includes(node.id)) {
+          item.classList.add('blast-affected');
+        }
+
+        const type = (node.type || node.node_type || 'frontend').replace('_component', '').replace('_route', '').replace('_model', '');
+        item.innerHTML = `
+          <div class="node-header">
+            <span class="node-tag ${type}">${type}</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">${node.file_path || ''}</span>
+          </div>
+          <div class="node-label-text">${formatNodeLabel(node)}</div>
+          <div class="node-subtext">${formatNodeSubtext(node)}</div>
+        `;
+        item.onclick = () => selectNode(node.id);
         container.appendChild(item);
       });
     }
 
-    async function inspectBlastRadius(nodeId) {
+    async function selectNode(nodeId) {
+      selectedNodeId = nodeId;
+      renderNodeList();
       try {
         const res = await fetch(`/api/blast-radius?node_id=${encodeURIComponent(nodeId)}`);
-        const blast = await res.json();
+        blastResult = await res.json();
+        
         const details = document.getElementById('blastDetails');
+        const affectedNodes = blastResult.affected_nodes || [];
+        const affectedFiles = blastResult.affected_files || [];
+        
         details.innerHTML = `
-          <strong>Target:</strong> ${blast.target || nodeId}<br/>
-          <strong>Impacted Nodes:</strong> ${(blast.affected_nodes || []).length}<br/>
-          <strong>Impacted Files:</strong> ${(blast.affected_files || []).join(', ') || 'None'}
+          <div style="margin-bottom: 6px;"><strong>Target:</strong> <span style="color:var(--text-main); word-break:break-all;">${nodeId}</span></div>
+          <div style="margin-bottom: 6px;"><strong>Impacted Nodes (${affectedNodes.length}):</strong> <span style="color:var(--accent-blast); font-weight:700;">${affectedNodes.length}</span></div>
+          <div style="margin-bottom: 6px;"><strong>Impacted Files (${affectedFiles.length}):</strong> <div style="color:var(--text-main); font-size:0.78rem;">${affectedFiles.join('<br/>') || 'None'}</div></div>
         `;
       } catch (err) {
-        console.error("Failed to fetch blast radius:", err);
+        console.error("Blast radius error:", err);
       }
+      renderNodeList();
+      renderCanvas();
+    }
+
+    function computeLayout() {
+      const canvas = document.getElementById('graphCanvas');
+      if (!canvas) return;
+      const width = canvas.parentElement.clientWidth;
+      const height = canvas.parentElement.clientHeight;
+      canvas.width = width;
+      canvas.height = height;
+
+      const nodes = rawGraph.nodes || [];
+      const feNodes = nodes.filter(n => (n.type === 'frontend' || n.node_type === 'frontend_component'));
+      const beNodes = nodes.filter(n => (n.type === 'route' || n.node_type === 'api_route'));
+      const dbNodes = nodes.filter(n => (n.type === 'model' || n.node_type === 'schema_model'));
+
+      const xCols = [width * 0.18, width * 0.50, width * 0.82];
+
+      const placeColumn = (colNodes, x) => {
+        const total = colNodes.length;
+        colNodes.forEach((n, idx) => {
+          const y = (height / (total + 1)) * (idx + 1);
+          nodePositions[n.id] = { x, y, node: n, radius: 24 };
+        });
+      };
+
+      placeColumn(feNodes, xCols[0]);
+      placeColumn(beNodes, xCols[1]);
+      placeColumn(dbNodes, xCols[2]);
+    }
+
+    function drawArrow(ctx, fromX, fromY, toX, toY, color, isHighlighted) {
+      const headlen = 10;
+      const angle = Math.atan2(toY - fromY, toX - fromX);
+
+      // Offset end point by node radius
+      const targetRadius = 26;
+      const endX = toX - targetRadius * Math.cos(angle);
+      const endY = toY - targetRadius * Math.sin(angle);
+      const startX = fromX + targetRadius * Math.cos(angle);
+      const startY = fromY + targetRadius * Math.sin(angle);
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = isHighlighted ? 3.5 : 2;
+      
+      if (isHighlighted) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+      }
+
+      // Bezier curve
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      const cp1X = startX + (endX - startX) * 0.5;
+      const cp1Y = startY;
+      const cp2X = startX + (endX - startX) * 0.5;
+      const cp2Y = endY;
+      ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY);
+      ctx.stroke();
+
+      // Arrow head
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - headlen * Math.cos(angle - Math.PI / 6), endY - headlen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(endX - headlen * Math.cos(angle + Math.PI / 6), endY - headlen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
     }
 
     function renderCanvas() {
       const canvas = document.getElementById('graphCanvas');
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Simple preview layout
-      const nodes = graphData.nodes || [];
-      const count = nodes.length;
-      if (count === 0) return;
 
-      nodes.forEach((n, i) => {
-        const x = (canvas.width / (count + 1)) * (i + 1);
-        const y = canvas.height / 2 + (i % 2 === 0 ? -40 : 40);
+      const edges = rawGraph.edges || [];
+      const blastAffected = blastResult ? (blastResult.affected_nodes || []) : [];
+
+      // 1. Draw Edges with Directional Arrows
+      edges.forEach(edge => {
+        const srcPos = nodePositions[edge.source];
+        const tgtPos = nodePositions[edge.target];
+        if (srcPos && tgtPos) {
+          const isEdgeHighlighted = (selectedNodeId === edge.source || selectedNodeId === edge.target) ||
+                                    (blastAffected.includes(edge.source) && blastAffected.includes(edge.target));
+          let edgeColor = 'rgba(71, 85, 105, 0.6)';
+          if (isEdgeHighlighted) {
+            edgeColor = '#f43f5e';
+          }
+          drawArrow(ctx, srcPos.x, srcPos.y, tgtPos.x, tgtPos.y, edgeColor, isEdgeHighlighted);
+        }
+      });
+
+      // 2. Draw Nodes
+      Object.values(nodePositions).forEach(pos => {
+        const node = pos.node;
+        const isSelected = selectedNodeId === node.id;
+        const isAffected = blastAffected.includes(node.id);
+
+        let nodeColor = '#38bdf8';
+        const type = node.type || node.node_type || '';
+        if (type.includes('route')) nodeColor = '#34d399';
+        else if (type.includes('model')) nodeColor = '#f59e0b';
+
+        ctx.save();
+        if (isSelected) {
+          ctx.shadowColor = '#f43f5e';
+          ctx.shadowBlur = 18;
+        } else if (isAffected) {
+          ctx.shadowColor = '#f59e0b';
+          ctx.shadowBlur = 14;
+        }
+
+        // Outer glow/ring
+        if (isSelected || isAffected) {
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, pos.radius + 6, 0, 2 * Math.PI);
+          ctx.fillStyle = isSelected ? 'rgba(244, 63, 94, 0.25)' : 'rgba(245, 158, 11, 0.2)';
+          ctx.fill();
+        }
+
+        // Main Node Body
         ctx.beginPath();
-        ctx.arc(x, y, 14, 0, 2 * Math.PI);
-        ctx.fillStyle = n.type === 'frontend' ? '#38bdf8' : (n.type === 'route' ? '#34d399' : '#f59e0b');
+        ctx.arc(pos.x, pos.y, pos.radius, 0, 2 * Math.PI);
+        ctx.fillStyle = isSelected ? '#f43f5e' : (isAffected ? '#f59e0b' : nodeColor);
         ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#0f172a';
+        ctx.stroke();
+
+        ctx.restore();
+
+        // Node Formatted Label
+        const label = formatNodeLabel(node);
+        ctx.save();
+        ctx.font = 'bold 12px sans-serif';
         ctx.fillStyle = '#f8fafc';
-        ctx.font = '11px sans-serif';
-        ctx.fillText(n.id.split('::').pop(), x - 20, y + 25);
+        ctx.textAlign = 'center';
+        ctx.fillText(label, pos.x, pos.y + pos.radius + 18);
+        ctx.restore();
       });
     }
+
+    // Canvas click interaction
+    document.getElementById('graphCanvas').addEventListener('click', (e) => {
+      const rect = e.target.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      for (const [id, pos] of Object.entries(nodePositions)) {
+        const dist = Math.hypot(clickX - pos.x, clickY - pos.y);
+        if (dist <= pos.radius + 8) {
+          selectNode(id);
+          return;
+        }
+      }
+    });
+
+    // Filter Controls
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.filter;
+        renderNodeList();
+      });
+    });
+
+    // Search Input
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      searchQuery = e.target.value.toLowerCase().trim();
+      renderNodeList();
+    });
+
+    window.addEventListener('resize', () => {
+      computeLayout();
+      renderCanvas();
+    });
 
     window.addEventListener('load', loadGraph);
   </script>
