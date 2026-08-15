@@ -2,7 +2,7 @@
 
 import os
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from tree_sitter import Language, Node, Parser
 import tree_sitter_python as tspython
 
@@ -81,6 +81,28 @@ class PythonRouteParser:
 
         return raw_subpath, full_path, http_method, response_model
 
+    def _extract_orm_references_from_func(self, func_node: Node, source_bytes: bytes) -> List[str]:
+        """Extracts referenced ORM models (e.g. db.query(BillingAccount), select(User)) from function node."""
+        refs: Set[str] = set()
+        
+        def traverse(node: Node) -> None:
+            if node.type == "call":
+                func = node.child_by_field_name("function")
+                if func:
+                    func_text = source_bytes[func.start_byte:func.end_byte].decode("utf-8")
+                    if func_text.endswith(".query") or func_text == "select":
+                        args = node.child_by_field_name("arguments")
+                        if args:
+                            for arg in args.children:
+                                if arg.type == "identifier":
+                                    id_name = source_bytes[arg.start_byte:arg.end_byte].decode("utf-8")
+                                    refs.add(id_name)
+            for child in node.children:
+                traverse(child)
+
+        traverse(func_node)
+        return sorted(list(refs))
+
     def parse_code(self, source_code: str, file_path: str = "routes.py") -> List[BackendRoute]:
         """Parses Python source code string and returns detected FastAPI routes."""
         source_bytes = source_code.encode("utf-8")
@@ -109,6 +131,8 @@ class PythonRouteParser:
                         else "unknown"
                     )
 
+                    orm_refs = self._extract_orm_references_from_func(func_node, source_bytes)
+
                     for dec_node in decorator_nodes:
                         parsed_dec = self._parse_route_decorator(dec_node, source_bytes, prefixes)
                         if parsed_dec:
@@ -131,6 +155,7 @@ class PythonRouteParser:
                                     http_methods=[http_method],
                                     path_params=path_params,
                                     response_model=resp_model,
+                                    orm_models_referenced=orm_refs,
                                 )
                             )
 
