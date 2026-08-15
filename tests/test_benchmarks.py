@@ -36,3 +36,15 @@ def test_benchmark_suite_run_all():
     verifier_res = next(r for r in summary["results"] if r["name"] == "Baseline-Diffed Compiler Verification")
     assert verifier_res["status"] == "passed"
     assert verifier_res["metrics"]["has_breakage"] is True
+
+
+def test_benchmark_suite_default_path_and_reporter(capsys):
+    from stackbridge.benchmarks.benchmark_runner import print_benchmark_report
+    suite = BenchmarkSuite()
+    assert suite.repo_path.exists()
+
+    summary = suite.run_all()
+    print_benchmark_report(summary)
+    captured = capsys.readouterr()
+    assert "StackBridge MCP Benchmark Suite" in captured.out
+    assert "Passed" in captured.out
