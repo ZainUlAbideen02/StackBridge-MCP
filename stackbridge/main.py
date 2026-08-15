@@ -60,6 +60,36 @@ def run_guard(repo_path: str, fail_on_error: bool = False) -> int:
     return 0
 
 
+def run_ui(
+    repo_path: str,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    no_browser: bool = False,
+    dry_run: bool = False,
+) -> int:
+    """Launches the interactive Web Visualizer."""
+    from stackbridge.ui.server import create_ui_server, get_graph_data
+    repo = Path(repo_path).resolve()
+    print(f"Launching StackBridge Web Visualizer for {repo}...")
+    graph_data = get_graph_data(repo)
+    print(f"Indexed {len(graph_data['nodes'])} nodes and {len(graph_data['edges'])} edges.")
+    url = f"http://{host}:{port}"
+    print(f"StackBridge Web Visualizer running on {url}")
+
+    if no_browser or dry_run:
+        print("Running in non-browser dry-run mode. Visualizer initialized successfully.")
+        return 0
+
+    import webbrowser
+    webbrowser.open(url)
+    server = create_ui_server(repo_path=repo, host=host, port=port)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping StackBridge Web Visualizer.")
+    return 0
+
+
 def run_serve() -> int:
     """Runs the MCP server."""
     from stackbridge.mcp_server.server import mcp
@@ -90,6 +120,14 @@ def main() -> None:
     guard_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
     guard_parser.add_argument("--fail-on-error", action="store_true", default=False, help="Exit with non-zero code on error")
 
+    # ui command
+    ui_parser = subparsers.add_parser("ui", help="Launch interactive full-stack dependency visualizer")
+    ui_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
+    ui_parser.add_argument("--host", default="127.0.0.1", help="Host address to bind")
+    ui_parser.add_argument("--port", "-p", type=int, default=8000, help="Port to bind")
+    ui_parser.add_argument("--no-browser", action="store_true", default=False, help="Do not open browser automatically / dry-run mode")
+    ui_parser.add_argument("--dry-run", action="store_true", default=False, help="Run dry run verification without blocking")
+
     # serve command
     serve_parser = subparsers.add_parser("serve", help="Start the MCP server")
 
@@ -101,6 +139,8 @@ def main() -> None:
         sys.exit(run_trace(args.repo_path, args.target))
     elif args.command == "guard":
         sys.exit(run_guard(args.repo_path, getattr(args, "fail_on_error", False)))
+    elif args.command == "ui":
+        sys.exit(run_ui(args.repo_path, args.host, args.port, getattr(args, "no_browser", False), getattr(args, "dry_run", False)))
     elif args.command == "serve":
         sys.exit(run_serve())
     else:

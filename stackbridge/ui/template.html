@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StackBridge - Fullstack Dependency Visualizer</title>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-panel: #1e293b;
+      --bg-card: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-fe: #38bdf8;
+      --accent-be: #34d399;
+      --accent-db: #f59e0b;
+      --accent-blast: #ef4444;
+      --border-color: #475569;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background-color: var(--bg-panel);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .logo span {
+      color: var(--accent-fe);
+    }
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+    }
+    .stat-pill {
+      background-color: var(--bg-card);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      display: flex;
+      gap: 6px;
+    }
+    .stat-value {
+      font-weight: 700;
+      color: var(--accent-fe);
+    }
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 65px);
+    }
+    .sidebar {
+      width: 340px;
+      background-color: var(--bg-panel);
+      border-right: 1px solid var(--border-color);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .search-input {
+      width: 100%;
+      background-color: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--accent-fe);
+    }
+    .filter-group {
+      display: flex;
+      gap: 8px;
+    }
+    .filter-btn {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-card);
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .filter-btn.active {
+      background-color: var(--accent-fe);
+      color: var(--bg-dark);
+      font-weight: 600;
+    }
+    .blast-card {
+      background-color: var(--bg-card);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .blast-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent-blast);
+    }
+    .graph-viewport {
+      flex: 1;
+      position: relative;
+      background-color: var(--bg-dark);
+      overflow: hidden;
+    }
+    #graphCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span>StackBridge</span> Visualizer
+    </div>
+    <div class="stats-bar">
+      <div class="stat-pill">Nodes: <span class="stat-value" id="nodeCount">0</span></div>
+      <div class="stat-pill">Edges: <span class="stat-value" id="edgeCount">0</span></div>
+      <div class="stat-pill">Frontend Calls: <span class="stat-value" id="feCount">0</span></div>
+      <div class="stat-pill">API Routes: <span class="stat-value" id="beCount">0</span></div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <aside class="sidebar">
+      <input type="text" id="searchInput" class="search-input" placeholder="Search node or route path..." />
+      <div class="filter-group">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="frontend">Frontend</button>
+        <button class="filter-btn" data-filter="route">Route</button>
+        <button class="filter-btn" data-filter="model">Model</button>
+      </div>
+
+      <div class="blast-card" id="blastRadiusPanel">
+        <div class="blast-title">Blast Radius Inspector</div>
+        <div id="blastDetails" style="font-size: 0.85rem; color: var(--text-muted);">
+          Select a node in the graph or table to calculate full-stack downstream blast radius.
+        </div>
+      </div>
+
+      <div id="nodeList" style="display: flex; flex-direction: column; gap: 8px;"></div>
+    </aside>
+
+    <main class="graph-viewport">
+      <canvas id="graphCanvas"></canvas>
+    </main>
+  </div>
+
+  <script>
+    let graphData = { nodes: [], edges: [], metrics: {} };
+
+    async function loadGraph() {
+      try {
+        const res = await fetch('/api/graph');
+        graphData = await res.json();
+        renderMetrics();
+        renderNodeList();
+        renderCanvas();
+      } catch (err) {
+        console.error("Failed to load graph data:", err);
+      }
+    }
+
+    function renderMetrics() {
+      document.getElementById('nodeCount').textContent = graphData.nodes ? graphData.nodes.length : 0;
+      document.getElementById('edgeCount').textContent = graphData.edges ? graphData.edges.length : 0;
+      const fe = (graphData.nodes || []).filter(n => n.type === 'frontend').length;
+      const be = (graphData.nodes || []).filter(n => n.type === 'route').length;
+      document.getElementById('feCount').textContent = fe;
+      document.getElementById('beCount').textContent = be;
+    }
+
+    function renderNodeList() {
+      const container = document.getElementById('nodeList');
+      container.innerHTML = '';
+      (graphData.nodes || []).forEach(node => {
+        const item = document.createElement('div');
+        item.style.padding = '8px';
+        item.style.background = 'var(--bg-card)';
+        item.style.borderRadius = '6px';
+        item.style.cursor = 'pointer';
+        item.style.fontSize = '0.85rem';
+        item.textContent = `${node.type.toUpperCase()}: ${node.id}`;
+        item.onclick = () => inspectBlastRadius(node.id);
+        container.appendChild(item);
+      });
+    }
+
+    async function inspectBlastRadius(nodeId) {
+      try {
+        const res = await fetch(`/api/blast-radius?node_id=${encodeURIComponent(nodeId)}`);
+        const blast = await res.json();
+        const details = document.getElementById('blastDetails');
+        details.innerHTML = `
+          <strong>Target:</strong> ${blast.target || nodeId}<br/>
+          <strong>Impacted Nodes:</strong> ${(blast.affected_nodes || []).length}<br/>
+          <strong>Impacted Files:</strong> ${(blast.affected_files || []).join(', ') || 'None'}
+        `;
+      } catch (err) {
+        console.error("Failed to fetch blast radius:", err);
+      }
+    }
+
+    function renderCanvas() {
+      const canvas = document.getElementById('graphCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Simple preview layout
+      const nodes = graphData.nodes || [];
+      const count = nodes.length;
+      if (count === 0) return;
+
+      nodes.forEach((n, i) => {
+        const x = (canvas.width / (count + 1)) * (i + 1);
+        const y = canvas.height / 2 + (i % 2 === 0 ? -40 : 40);
+        ctx.beginPath();
+        ctx.arc(x, y, 14, 0, 2 * Math.PI);
+        ctx.fillStyle = n.type === 'frontend' ? '#38bdf8' : (n.type === 'route' ? '#34d399' : '#f59e0b');
+        ctx.fill();
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '11px sans-serif';
+        ctx.fillText(n.id.split('::').pop(), x - 20, y + 25);
+      });
+    }
+
+    window.addEventListener('load', loadGraph);
+  </script>
+</body>
+</html>
