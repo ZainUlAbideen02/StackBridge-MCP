@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stackbridge"
+version = "0.1.0"
+description = "Local MCP server that traces full-stack dependencies across Next.js, FastAPI, and SQLAlchemy"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "tree-sitter>=0.22.0",
+    "tree-sitter-python",
+    "tree-sitter-typescript",
+    "pydantic>=2.7.0",
+    "networkx>=3.2",
+    "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
