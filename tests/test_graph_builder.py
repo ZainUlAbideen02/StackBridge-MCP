@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser
+from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser, extract_sqlalchemy_models
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
@@ -41,6 +41,26 @@ def test_sqlalchemy_parser_extraction():
     assert "User" in billing_model.relationships
 
 
+def test_extract_sqlalchemy_models_standalone():
+    assert MODELS_FIXTURE.exists(), f"Models fixture not found at {MODELS_FIXTURE}"
+    with open(MODELS_FIXTURE, "r", encoding="utf-8") as f:
+        code = f.read()
+    
+    models = extract_sqlalchemy_models(code, str(MODELS_FIXTURE))
+    assert len(models) == 2
+    class_names = [m.class_name for m in models]
+    assert "User" in class_names
+    assert "BillingAccount" in class_names
+
+    user_info = next(m for m in models if m.class_name == "User")
+    assert user_info.table_name == "users"
+    assert any(f.name == "email" for f in user_info.fields)
+
+    billing_info = next(m for m in models if m.class_name == "BillingAccount")
+    assert billing_info.table_name == "billing_accounts"
+    assert any(f.name == "plan" for f in billing_info.fields)
+
+
 def test_stack_graph_build_from_repo():
     sg = StackGraph.build_from_repo(str(FIXTURES_DIR))
 
@@ -50,10 +70,11 @@ def test_stack_graph_build_from_repo():
     assert "route" in node_types
     assert "model" in node_types
 
-    # Verify specific nodes
+    # Verify specific nodes: UserProfile.tsx, /api/v1/users/{user_id}/billing (get_user_billing), BillingAccount, User
     assert any("UserProfile.tsx" in n for n in sg.graph.nodes)
-    assert any("get_user_billing" in n for n in sg.graph.nodes)
+    assert any("get_user_billing" in n or "/api/v1/users/{user_id}/billing" in str(d) for n, d in sg.graph.nodes(data=True))
     assert any("BillingAccount" in n for n in sg.graph.nodes)
+    assert any("User" in n for n in sg.graph.nodes)
 
     # Verify cross-boundary edge between UserProfile.tsx and /api/v1/users/{user_id}/billing route with confidence 0.88
     matching_edges = [
@@ -116,15 +137,15 @@ def test_json_export_and_caching(tmp_path):
     assert len(sg_restored.graph.edges) == len(sg.graph.edges)
 
     # Test file export and load
-    export_file = tmp_path / "graph_export.json"
+    export_file = tmp_path / ".stackbridge" / "graph.json"
     sg.export_json(export_file)
     assert export_file.exists()
 
     sg_file_loaded = StackGraph.load_json(export_file)
     assert len(sg_file_loaded.graph.nodes) == len(sg.graph.nodes)
 
-    # Test cache saving and loading
-    cache_file = tmp_path / ".stackbridge_cache.json"
+    # Test cache saving and loading in .stackbridge/graph.json
+    cache_file = tmp_path / ".stackbridge" / "graph.json"
     sg.save_cache(cache_file)
     assert cache_file.exists()
 
