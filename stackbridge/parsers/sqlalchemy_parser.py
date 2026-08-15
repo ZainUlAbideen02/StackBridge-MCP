@@ -2,11 +2,11 @@
 
 import os
 import re
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_python as tspython
 
-from stackbridge.core.models import ORMField, ORMModel
+from stackbridge.core.models import FieldInfo, ORMField, ORMModel, SQLAlchemyModelInfo
 
 
 class SQLAlchemyParser:
@@ -18,7 +18,6 @@ class SQLAlchemyParser:
 
     def _extract_field(self, name: str, expr_str: str) -> Optional[ORMField]:
         """Extracts ORMField details from assignment expression."""
-        # Column(String, primary_key=True, ...) or mapped_column(...)
         col_match = re.search(r"(?:Column|mapped_column)\s*\((.*?)\)", expr_str, re.DOTALL)
         if not col_match:
             return None
@@ -46,7 +45,6 @@ class SQLAlchemyParser:
                     if fk_match:
                         foreign_key = fk_match.group(1)
             else:
-                # Positional argument: data type or ForeignKey(...)
                 if "ForeignKey(" in arg:
                     fk_match = re.search(r"""ForeignKey\s*\(\s*["']([^"']+)["']\s*\)""", arg)
                     if fk_match:
@@ -113,7 +111,6 @@ class SQLAlchemyParser:
                                             if target:
                                                 relationships.append(target)
 
-                # Only include as ORMModel if __tablename__ or fields are detected
                 if table_name or fields or relationships:
                     models.append(
                         ORMModel(
@@ -133,3 +130,33 @@ class SQLAlchemyParser:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
         return self.parse_code(content, file_path=file_path)
+
+
+# Compatibility standalone function
+
+def extract_sqlalchemy_models(code: str, file_path: str) -> List[SQLAlchemyModelInfo]:
+    """Extract SQLAlchemy declarative models from code using Tree-sitter."""
+    parser_obj = SQLAlchemyParser()
+    orm_models = parser_obj.parse_code(code, file_path=file_path)
+    result: List[SQLAlchemyModelInfo] = []
+    for m in orm_models:
+        field_infos = [
+            FieldInfo(
+                name=f.name,
+                type_annotation=f.data_type,
+                is_nullable=f.is_nullable,
+                is_primary_key=f.is_primary_key,
+            )
+            for f in m.fields
+        ]
+        result.append(
+            SQLAlchemyModelInfo(
+                file_path=m.file_path,
+                line=m.line_number,
+                class_name=m.class_name,
+                table_name=m.table_name,
+                fields=field_infos,
+                relationships=m.relationships,
+            )
+        )
+    return result

@@ -2,11 +2,11 @@
 
 import os
 import re
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_python as tspython
 
-from stackbridge.core.models import BackendRoute, EndpointParam, HttpMethod
+from stackbridge.core.models import BackendRoute, EndpointParam, FastAPIRoute, HttpMethod
 
 
 class PythonRouteParser:
@@ -50,7 +50,6 @@ class PythonRouteParser:
         """Parses @router.get("/path", response_model=...) decorator."""
         dec_text = source_bytes[decorator_node.start_byte:decorator_node.end_byte].decode("utf-8")
         
-        # Match @<obj>.<method>(...)
         match = re.search(r"@([a-zA-Z0-9_]+)\.(get|post|put|delete|patch|options|head)\s*\((.*)\)", dec_text, re.DOTALL)
         if not match:
             return None
@@ -59,13 +58,11 @@ class PythonRouteParser:
         http_method = HttpMethod(method_name.upper())
         prefix = prefixes.get(router_var, "")
 
-        # Extract path argument (first positional argument or path=...)
         path_match = re.search(r"""(?:path\s*=\s*)?["']([^"']+)["']""", args_str)
         if not path_match:
             return None
         
         raw_subpath = path_match.group(1)
-        # Build full path
         if prefix:
             clean_prefix = "/" + prefix.strip("/")
             clean_subpath = "/" + raw_subpath.strip("/") if raw_subpath.strip("/") else ""
@@ -73,7 +70,6 @@ class PythonRouteParser:
         else:
             full_path = "/" + raw_subpath.strip("/") if raw_subpath.strip("/") else "/"
 
-        # Response model extraction
         response_model = None
         rm_match = re.search(r"response_model\s*=\s*([a-zA-Z0-9_\[\],\s]+)", args_str)
         if rm_match:
@@ -138,7 +134,6 @@ class PythonRouteParser:
                         if parsed_dec:
                             raw_subpath, full_path, http_method, resp_model = parsed_dec
                             
-                            # Extract path params like {user_id}
                             param_names = re.findall(r"\{([a-zA-Z0-9_]+)(?::[^}]+)?\}", full_path)
                             path_params = [
                                 EndpointParam(name=p, param_type="path", required=True)
@@ -170,3 +165,65 @@ class PythonRouteParser:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
         return self.parse_code(content, file_path=file_path)
+
+
+# Compatibility standalone functions
+
+def _normalize_fastapi_path_to_regex(path: str) -> Tuple[str, List[str]]:
+    cleaned = path.rstrip("/") if len(path) > 1 else path
+    path_params: List[str] = []
+    
+    def replace_param(match: re.Match) -> str:
+        param_name = match.group(1)
+        path_params.append(param_name)
+        return '[^/]+'
+    
+    pattern = re.sub(r'\{([a-zA-Z_][a-zA-Z0-9_]*)(?::[^}]*)?\}', replace_param, cleaned)
+    regex = f"^{pattern}$"
+    return regex, path_params
+
+
+def _extract_decorator_info(decorator_node: Node, source_code: bytes) -> Optional[Tuple[str, str, str]]:
+    decorator_text = decorator_node.text.decode('utf-8')
+    http_methods = ['get', 'post', 'put', 'delete', 'patch', 'options', 'head']
+    pattern = r'@(?:app|router)\.(\w+)\s*\(\s*["\']([^"\']+)["\']'
+    match = re.search(pattern, decorator_text)
+    if match:
+        method = match.group(1).lower()
+        path = match.group(2)
+        if method in http_methods:
+            return (method.upper(), path, decorator_text)
+    return None
+
+
+def _find_function_definition(decorator_node: Node) -> Optional[Node]:
+    parent = decorator_node.parent
+    if not parent:
+        return None
+    if parent.type == 'decorated_definition':
+        for child in parent.children:
+            if child.type in ('function_definition', 'async_function_definition'):
+                return child
+    return None
+
+
+def extract_fastapi_routes(code: str, file_path: str) -> List[FastAPIRoute]:
+    """Extract FastAPI route definitions from Python code using Tree-sitter."""
+    parser_obj = PythonRouteParser()
+    backend_routes = parser_obj.parse_code(code, file_path=file_path)
+    fastapi_routes: List[FastAPIRoute] = []
+    for r in backend_routes:
+        reg, pparams = _normalize_fastapi_path_to_regex(r.normalized_path)
+        method_str = r.http_methods[0].value if r.http_methods else "GET"
+        fastapi_routes.append(
+            FastAPIRoute(
+                file_path=r.file_path,
+                line=r.line_number,
+                http_method=method_str,
+                route_path=r.normalized_path,
+                normalized_regex=reg,
+                handler_name=r.function_name,
+                path_params=[p.name for p in r.path_params],
+            )
+        )
+    return fastapi_routes

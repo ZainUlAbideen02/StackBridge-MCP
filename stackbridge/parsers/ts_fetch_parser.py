@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_typescript as tstypescript
 
-from stackbridge.core.models import FrontendEndpointCall, HttpMethod
+from stackbridge.core.models import FrontendEndpointCall, FrontendFetchCall, HttpMethod
 
 
 class TypeScriptFetchParser:
@@ -53,14 +53,12 @@ class TypeScriptFetchParser:
                 fragment = source_bytes[child.start_byte:child.end_byte].decode("utf-8")
                 normalized_parts.append(fragment)
             elif child.type == "template_substitution":
-                # Child contains ${...}
                 sub_expr = None
                 for sub_child in child.children:
                     if sub_child.type not in ("${", "}") and sub_child.is_named:
                         sub_expr = source_bytes[sub_child.start_byte:sub_child.end_byte].decode("utf-8").strip()
                         break
                 if not sub_expr:
-                    # fallback to inner text
                     raw_sub = source_bytes[child.start_byte:child.end_byte].decode("utf-8")
                     sub_expr = raw_sub.lstrip("${").rstrip("}").strip()
                 
@@ -134,3 +132,62 @@ class TypeScriptFetchParser:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
         return self.parse_code(content, file_path=file_path)
+
+
+# Compatibility helper functions
+
+def _extract_path_params_from_template(template_str: str) -> Tuple[str, List[str]]:
+    param_pattern = r'\$\{([^}]+)\}'
+    params = []
+    
+    def replace_with_wildcard(match: re.Match) -> str:
+        param_expr = match.group(1).strip()
+        param_name = param_expr.split('.')[-1]
+        params.append(param_name)
+        return '[^/]+'
+    
+    normalized = re.sub(param_pattern, replace_with_wildcard, template_str)
+    return normalized, params
+
+
+def _parse_string_node(node: Node, source_code: bytes) -> Optional[str]:
+    if node.type == 'string':
+        content = node.text.decode('utf-8')
+        if (content.startswith("'") and content.endswith("'")) or \
+           (content.startswith('"') and content.endswith('"')):
+            return content[1:-1]
+    return None
+
+
+def _extract_http_method_from_options(options_node: Node, source_code: bytes) -> str:
+    for child in options_node.children:
+        if child.type == 'pair':
+            key_node = child.child_by_field_name('key')
+            value_node = child.child_by_field_name('value')
+            if key_node and value_node:
+                key_text = key_node.text.decode('utf-8').strip().strip('"\'')
+                if key_text.lower() == 'method':
+                    value_text = value_node.text.decode('utf-8').strip().strip('"\'')
+                    return value_text.upper()
+    return "GET"
+
+
+def extract_nextjs_fetches(code: str, file_path: str) -> List[FrontendFetchCall]:
+    """Extract fetch() calls from TypeScript/TSX code using Tree-sitter."""
+    parser_obj = TypeScriptFetchParser()
+    calls = parser_obj.parse_code(code, file_path=file_path)
+    fetches: List[FrontendFetchCall] = []
+    for c in calls:
+        method_str = c.http_method.value if isinstance(c.http_method, HttpMethod) else str(c.http_method)
+        fetches.append(
+            FrontendFetchCall(
+                file_path=c.file_path,
+                line=c.line_number,
+                raw_expression=c.raw_url,
+                normalized_pattern=c.normalized_path,
+                http_method=method_str,
+                is_template=c.is_template,
+                path_params=c.path_params,
+            )
+        )
+    return fetches

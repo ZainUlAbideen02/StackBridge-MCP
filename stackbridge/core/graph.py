@@ -6,7 +6,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
 import networkx as nx
 
-from stackbridge.core.models import BackendRoute, FrontendEndpointCall, HttpMethod, ORMModel, RouteMatchResult
+from stackbridge.core.models import (
+    BackendRoute,
+    FrontendEndpointCall,
+    GraphEdge,
+    GraphNode,
+    HttpMethod,
+    ORMModel,
+    RouteMatchResult,
+    StackGraphExport,
+)
 from stackbridge.core.route_matcher import match_frontend_call_to_routes
 from stackbridge.parsers.py_route_parser import PythonRouteParser
 from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser
@@ -21,6 +30,8 @@ class StackGraph:
         self.frontend_calls: Dict[str, FrontendEndpointCall] = {}
         self.backend_routes: Dict[str, BackendRoute] = {}
         self.orm_models: Dict[str, ORMModel] = {}
+        self._node_index: Dict[str, GraphNode] = {}
+        self._edge_list: List[GraphEdge] = []
 
     def _normalize_path(self, path: Union[str, Path], base_dir: Optional[Union[str, Path]] = None) -> str:
         p_str = str(path).replace("\\", "/")
@@ -30,14 +41,42 @@ class StackGraph:
                 p_str = p_str[len(b_str):].lstrip("/")
         return p_str
 
+    @property
+    def node_count(self) -> int:
+        return self.graph.number_of_nodes()
+
+    @property
+    def edge_count(self) -> int:
+        return self.graph.number_of_edges()
+
+    def get_node(self, node_id: str) -> Optional[GraphNode]:
+        return self._node_index.get(node_id)
+
+    def add_node(self, node: GraphNode) -> None:
+        self.graph.add_node(node.id, **node.model_dump())
+        self._node_index[node.id] = node
+
+    def add_edge(self, edge: GraphEdge) -> None:
+        self.graph.add_edge(
+            edge.source,
+            edge.target,
+            relation_type=edge.relation_type,
+            confidence=edge.confidence,
+            **edge.metadata,
+        )
+        self._edge_list.append(edge)
+
     def add_frontend_call(self, call: FrontendEndpointCall, base_dir: Optional[str] = None) -> str:
         rel_path = self._normalize_path(call.file_path, base_dir)
         node_id = f"{rel_path}::fetch::{call.line_number}"
         self.frontend_calls[node_id] = call
         self.graph.add_node(
             node_id,
+            id=node_id,
             type="frontend",
+            node_type="frontend_component",
             file_path=rel_path,
+            line=call.line_number,
             line_number=call.line_number,
             raw_url=call.raw_url,
             normalized_path=call.normalized_path,
@@ -53,8 +92,11 @@ class StackGraph:
         self.backend_routes[node_id] = route
         self.graph.add_node(
             node_id,
+            id=node_id,
             type="route",
+            node_type="api_route",
             file_path=rel_path,
+            line=route.line_number,
             line_number=route.line_number,
             function_name=route.function_name,
             raw_path=route.raw_path,
@@ -71,8 +113,11 @@ class StackGraph:
         self.orm_models[node_id] = model
         self.graph.add_node(
             node_id,
+            id=node_id,
             type="model",
+            node_type="schema_model",
             file_path=rel_path,
+            line=model.line_number,
             line_number=model.line_number,
             class_name=model.class_name,
             table_name=model.table_name,
@@ -89,6 +134,7 @@ class StackGraph:
             fe_node_id,
             route_node_id,
             relation="calls",
+            relation_type="FETCHES",
             confidence=confidence,
             is_exact=is_exact,
             param_mappings=param_mappings,
@@ -99,6 +145,7 @@ class StackGraph:
             route_node_id,
             model_node_id,
             relation="accesses",
+            relation_type="USES_MODEL",
         )
 
     def link_model_to_model(self, model_node_id_1: str, model_node_id_2: str, rel_name: str = "relates_to") -> None:
@@ -106,10 +153,11 @@ class StackGraph:
             model_node_id_1,
             model_node_id_2,
             relation=rel_name,
+            relation_type="RELATIONSHIP",
         )
 
     @classmethod
-    def build_from_repo(cls, repo_path: Union[str, Path]) -> "StackGraph":
+    def build_from_repo(cls, repo_path: Union[str, Path], api_prefix_strip: Optional[str] = None) -> "StackGraph":
         """Scans a repository, parses TypeScript, Python FastAPI routes, and SQLAlchemy models, and builds graph."""
         sg = cls()
         repo_dir = Path(repo_path).resolve()
@@ -122,9 +170,7 @@ class StackGraph:
         parsed_routes: List[tuple[str, BackendRoute]] = []
         parsed_models: List[tuple[str, ORMModel]] = []
 
-        # Walk repository files
         for root, dirs, files in os.walk(repo_dir):
-            # Ignore .git, node_modules, .venv, etc.
             dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache")]
             for file in files:
                 full_file_path = os.path.join(root, file)
@@ -160,7 +206,6 @@ class StackGraph:
                     except Exception:
                         pass
 
-        # 1. Match frontend calls to backend routes
         all_backend_routes = [r for _, r in parsed_routes]
         route_to_id = {r.raw_path: r_id for r_id, r in parsed_routes}
         route_to_id.update({r.normalized_path: r_id for r_id, r in parsed_routes})
@@ -182,14 +227,12 @@ class StackGraph:
                         param_mappings=match.param_mappings,
                     )
 
-        # 2. Link routes to ORM models referenced
         model_name_to_id = {m.class_name: m_id for m_id, m in parsed_models}
         for r_id, route in parsed_routes:
             for model_name in route.orm_models_referenced:
                 if model_name in model_name_to_id:
                     sg.link_route_to_model(r_id, model_name_to_id[model_name])
 
-        # 3. Link ORM relationships
         for m_id, model in parsed_models:
             for target_rel in model.relationships:
                 if target_rel in model_name_to_id:
@@ -198,12 +241,10 @@ class StackGraph:
         return sg
 
     def _resolve_target_node(self, target_identifier: str) -> Optional[str]:
-        """Finds node ID matching identifier (exact id, symbol name, or path suffix)."""
         target_clean = target_identifier.replace("\\", "/")
         if target_clean in self.graph.nodes:
             return target_clean
 
-        # Check if symbol matches class name or function name
         for node_id, data in self.graph.nodes(data=True):
             if node_id.endswith(f"::{target_clean}") or node_id.endswith(f":{target_clean}"):
                 return node_id
@@ -214,7 +255,7 @@ class StackGraph:
 
         return None
 
-    def get_blast_radius(self, target_identifier: str) -> Dict[str, Any]:
+    def get_blast_radius(self, target_identifier: str, depth: int = 5) -> Dict[str, Any]:
         """
         Traces full-stack blast radius of a change at target_identifier (e.g. 'backend/models.py::BillingAccount').
         Traces upstream routes and frontend callers.
@@ -231,17 +272,13 @@ class StackGraph:
                 "paths": [],
             }
 
-        # Build undirected view or traverse reverse edges for upstream dependencies
         affected_nodes: Set[str] = set()
         affected_routes: List[Dict[str, Any]] = []
         affected_frontend: List[Dict[str, Any]] = []
         affected_files: Set[str] = set()
         paths: List[List[str]] = []
 
-        # Undirected graph for full blast radius
         undirected = self.graph.to_undirected()
-        
-        # Traverse BFS from target
         visited = set([target_node])
         queue = [[target_node]]
 
@@ -273,16 +310,17 @@ class StackGraph:
 
         return {
             "target": target_node,
+            "target_node": target_node,
             "found": True,
             "affected_nodes": sorted(list(affected_nodes)),
             "affected_routes": affected_routes,
             "affected_frontend": affected_frontend,
             "affected_files": sorted(list(affected_files)),
+            "impacted_files": sorted(list(affected_files)),
             "paths": paths,
         }
 
     def to_dict(self) -> Dict[str, Any]:
-        """Serializes graph and metadata to dictionary."""
         nodes_data = []
         for n, d in self.graph.nodes(data=True):
             clean_d = {k: v for k, v in d.items() if k != "data"}
@@ -301,17 +339,20 @@ class StackGraph:
         }
 
     def to_json(self, indent: int = 2) -> str:
-        """Serializes graph to JSON string."""
         return json.dumps(self.to_dict(), indent=indent)
 
-    def export_json(self, file_path: Union[str, Path]) -> None:
-        """Exports graph JSON to file."""
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(self.to_json())
+    def export_json(self, file_path: Optional[Union[str, Path]] = None) -> str:
+        json_output = self.to_json()
+        if file_path:
+            p = Path(file_path)
+            if p.parent and not p.parent.exists():
+                p.parent.mkdir(parents=True, exist_ok=True)
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(json_output)
+        return json_output
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "StackGraph":
-        """Deserializes graph from dictionary."""
         sg = cls()
         for n in data.get("nodes", []):
             node_id = n["id"]
@@ -328,22 +369,18 @@ class StackGraph:
 
     @classmethod
     def from_json(cls, json_str: str) -> "StackGraph":
-        """Deserializes graph from JSON string."""
         return cls.from_dict(json.loads(json_str))
 
     @classmethod
     def load_json(cls, file_path: Union[str, Path]) -> "StackGraph":
-        """Loads graph from JSON file."""
         with open(file_path, "r", encoding="utf-8") as f:
             return cls.from_json(f.read())
 
     def save_cache(self, cache_path: Union[str, Path] = ".stackbridge_cache.json") -> None:
-        """Saves current graph to cache file."""
         self.export_json(cache_path)
 
     @classmethod
     def load_cache(cls, cache_path: Union[str, Path] = ".stackbridge_cache.json") -> Optional["StackGraph"]:
-        """Loads graph from cache file if it exists."""
         if os.path.exists(cache_path):
             try:
                 return cls.load_json(cache_path)
