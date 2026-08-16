@@ -20,8 +20,13 @@ python -m venv .venv
 pip install -e ".[dev]"
 ```
 
-## Running Tests
+## Testing & Validation
 
 ```bash
-pytest
+# Run the mock MCP client verification test
+python scripts/test_mcp_client.py
+
+# Run the complete test suite
+pytest -v
 ```
+
