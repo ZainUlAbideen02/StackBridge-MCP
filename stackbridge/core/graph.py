@@ -288,11 +288,20 @@ class StackGraph:
             return target_clean
 
         for node_id, data in self.graph.nodes(data=True):
-            if node_id.endswith(f"::{target_clean}") or node_id.endswith(f":{target_clean}"):
+            node_clean = node_id.replace("\\", "/")
+            if node_clean == target_clean or node_clean.endswith(f"::{target_clean}") or node_clean.endswith(f":{target_clean}"):
                 return node_id
+            if target_clean.endswith(node_clean):
+                return node_id
+            if "::" in target_clean:
+                symbol = target_clean.split("::")[-1]
+                path_part = target_clean.split("::")[0]
+                if data.get("function_name") == symbol or data.get("class_name") == symbol:
+                    if not path_part or path_part in node_clean or node_clean.endswith(path_part):
+                        return node_id
             if data.get("class_name") == target_clean or data.get("function_name") == target_clean:
                 return node_id
-            if target_clean in node_id:
+            if target_clean in node_clean or node_clean in target_clean:
                 return node_id
 
         return None

@@ -90,12 +90,20 @@ def run_ui(
     return 0
 
 
-def run_serve() -> int:
+def run_serve(transport: str = "stdio") -> int:
     """Runs the MCP server."""
     from stackbridge.mcp_server.server import mcp
-    print("Starting StackBridge MCP Server...")
-    mcp.run()
-    return 0
+    if transport == "stdio":
+        if hasattr(mcp, "run"):
+            try:
+                mcp.run(transport="stdio")
+            except TypeError:
+                mcp.run()
+        return 0
+    else:
+        print(f"Starting StackBridge MCP Server ({transport})...", file=sys.stderr)
+        mcp.run(transport=transport)
+        return 0
 
 
 def main() -> None:
@@ -130,6 +138,7 @@ def main() -> None:
 
     # serve command
     serve_parser = subparsers.add_parser("serve", help="Start the MCP server")
+    serve_parser.add_argument("--transport", default="stdio", choices=["stdio", "sse", "stream"], help="Transport protocol (stdio, sse)")
 
     args = parser.parse_args()
 
@@ -142,7 +151,7 @@ def main() -> None:
     elif args.command == "ui":
         sys.exit(run_ui(args.repo_path, args.host, args.port, getattr(args, "no_browser", False), getattr(args, "dry_run", False)))
     elif args.command == "serve":
-        sys.exit(run_serve())
+        sys.exit(run_serve(getattr(args, "transport", "stdio")))
     else:
         parser.print_help()
         sys.exit(0)
