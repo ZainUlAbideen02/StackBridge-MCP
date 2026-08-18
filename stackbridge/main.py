@@ -122,6 +122,46 @@ def run_init_agents(repo_path: str, output: Optional[str] = None) -> int:
     return 0
 
 
+def run_benchmark(repo_path: Optional[str] = None, runs: int = 1, output: Optional[str] = None) -> int:
+    """Executes the StackBridge performance and token efficiency benchmark suite."""
+    from stackbridge.benchmarks.benchmark_runner import BenchmarkSuite, print_benchmark_report
+
+    suite = BenchmarkSuite(repo_path=repo_path)
+    if runs > 1:
+        summary = suite.run_multiple(runs=runs)
+    else:
+        summary = suite.run_all()
+
+    print_benchmark_report(summary)
+
+    if output:
+        out_path = BenchmarkSuite.write_markdown_report(summary, output)
+        print(f"Benchmark results written to {out_path}")
+
+    return 0
+
+
+def run_watch(repo_path: str = ".") -> int:
+    """Starts background file watcher to keep .stackbridge/graph.db continuously warm."""
+    from stackbridge.core.watcher import BackgroundWatcher
+
+    repo = Path(repo_path).resolve()
+    print(f"Starting continuous background watcher for repository at {repo}...")
+    watcher = BackgroundWatcher(
+        repo_path=str(repo),
+        on_update_callback=lambda g: print(f"[{time.strftime('%H:%M:%S')}] Graph updated ({g.node_count} nodes, {g.edge_count} edges) -> .stackbridge/graph.db"),
+    )
+    watcher.start()
+    print("StackBridge Watcher active. Monitoring file changes (Ctrl+C to stop)...")
+    try:
+        while True:
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\nStopping background watcher...")
+        watcher.stop()
+        return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="stackbridge",
@@ -140,6 +180,16 @@ def main() -> None:
     agents_parser = subparsers.add_parser("init-agents", help="Generate AGENTS.md architecture and boundary context guide")
     agents_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
     agents_parser.add_argument("--output", "-o", default=None, help="Custom output path for generated AGENTS.md")
+
+    # watch command
+    watch_parser = subparsers.add_parser("watch", help="Start continuous background file watcher and graph warmer")
+    watch_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
+
+    # benchmark command
+    bench_parser = subparsers.add_parser("benchmark", help="Run AST parsing, traversal, and verification benchmarks")
+    bench_parser.add_argument("--repo-path", "-r", default=None, help="Path to repository to benchmark (default: synthetic fixture)")
+    bench_parser.add_argument("--runs", "-n", type=int, default=1, help="Number of benchmark iterations to average")
+    bench_parser.add_argument("--output", "-o", default=None, help="Output Markdown report path")
 
     # trace command
     trace_parser = subparsers.add_parser("trace", help="Trace full-stack blast radius for a model or route")
@@ -170,6 +220,10 @@ def main() -> None:
         sys.exit(run_index(args.repo_path, args.output, getattr(args, "no_cache", False)))
     elif args.command == "init-agents":
         sys.exit(run_init_agents(args.repo_path, args.output))
+    elif args.command == "watch":
+        sys.exit(run_watch(args.repo_path))
+    elif args.command == "benchmark":
+        sys.exit(run_benchmark(args.repo_path, getattr(args, "runs", 1), args.output))
     elif args.command == "trace":
         target = args.target or args.pos_target
         if not target:

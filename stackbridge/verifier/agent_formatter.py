@@ -91,6 +91,9 @@ class AgentDiagnosticFormatter:
                 "- **Verification**: All frontend fetch calls, API routes, and ORM model schemas match without type drift.\n"
             )
 
+        from stackbridge.core.config import StackBridgeConfig
+        config = StackBridgeConfig(repo_path=repo_path)
+
         breaking_items: List[Union[DiagnosticError, Dict[str, Any]]] = []
         drift_items: List[Union[DiagnosticError, Dict[str, Any]]] = []
 
@@ -102,11 +105,24 @@ class AgentDiagnosticFormatter:
             else:
                 breaking_items.append(d)
 
+        def _get_item_priority(item: Union[DiagnosticError, Dict[str, Any]]) -> int:
+            fpath = item.file_path if isinstance(item, DiagnosticError) else item.get("file_path", "")
+            is_crit = config.is_critical_path(fpath)
+            score = 100 if is_crit else 10
+            return score
+
+        # Rank critical paths first
+        breaking_items.sort(key=_get_item_priority, reverse=True)
+        drift_items.sort(key=_get_item_priority, reverse=True)
+
+        has_critical_break = any(config.is_critical_path(it.file_path if isinstance(it, DiagnosticError) else it.get("file_path", "")) for it in breaking_items)
+
         output_lines: List[str] = []
 
         # Overall Status Header
         if breaking_items:
-            output_lines.append(f"## 🔴 BREAKING: {len(breaking_items)} Cross-Stack Compiler Error(s) Detected\n")
+            crit_prefix = "🚨 CRITICAL BREAKING" if has_critical_break else "🔴 BREAKING"
+            output_lines.append(f"## {crit_prefix}: {len(breaking_items)} Cross-Stack Compiler Error(s) Detected\n")
             output_lines.append("> **Action Required**: Schema modifications break downstream route handlers or frontend caller contracts.\n")
         else:
             output_lines.append(f"## 🟡 DRIFT: {len(drift_items)} Schema Drift Warning(s) Detected\n")
@@ -120,11 +136,13 @@ class AgentDiagnosticFormatter:
                 line = item.line if isinstance(item, DiagnosticError) else item.get("line", 1)
                 msg = item.message if isinstance(item, DiagnosticError) else item.get("message", "")
                 rule = item.rule if isinstance(item, DiagnosticError) else item.get("rule", "compiler-error")
+                is_crit = config.is_critical_path(fpath)
 
                 snippet = cls._extract_snippet(fpath, line, repo_path=repo_path)
                 fix = cls._generate_suggested_fix(item)
+                crit_badge = "🚨 **[CRITICAL PATH]** " if is_crit else ""
 
-                output_lines.append(f"#### Error {idx}: `{rule}` in `{fpath}:{line}`")
+                output_lines.append(f"#### Error {idx}: {crit_badge}`{rule}` in `{fpath}:{line}`")
                 output_lines.append(f"**Diagnostic**: {msg}\n")
                 output_lines.append("```python")
                 output_lines.append(snippet)
@@ -139,11 +157,13 @@ class AgentDiagnosticFormatter:
                 line = item.line if isinstance(item, DiagnosticError) else item.get("line", 1)
                 msg = item.message if isinstance(item, DiagnosticError) else item.get("message", "")
                 rule = item.rule if isinstance(item, DiagnosticError) else item.get("rule", "schema-drift")
+                is_crit = config.is_critical_path(fpath)
 
                 snippet = cls._extract_snippet(fpath, line, repo_path=repo_path)
                 fix = cls._generate_suggested_fix(item)
+                crit_badge = "🚨 **[CRITICAL PATH]** " if is_crit else ""
 
-                output_lines.append(f"#### Warning {idx}: `{rule}` in `{fpath}:{line}`")
+                output_lines.append(f"#### Warning {idx}: {crit_badge}`{rule}` in `{fpath}:{line}`")
                 output_lines.append(f"**Notice**: {msg}\n")
                 output_lines.append("```python")
                 output_lines.append(snippet)
