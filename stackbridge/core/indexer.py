@@ -154,7 +154,7 @@ class IncrementalIndexer:
             ]
             if ".gitignore" in files:
                 git_path = Path(root) / ".gitignore"
-                rel_root = os.path.relpath(root, self.repo_dir).replace("\\", "/")
+                rel_root = Path(os.path.relpath(root, self.repo_dir)).as_posix()
                 try:
                     with open(git_path, "r", encoding="utf-8") as f:
                         for line in f:
@@ -182,7 +182,7 @@ class IncrementalIndexer:
 
     def should_ignore(self, rel_path: str) -> bool:
         """Checks if a relative path matches default or .gitignore exclusion rules using pathspec or fallback."""
-        norm_path = rel_path.replace("\\", "/").strip("/")
+        norm_path = Path(rel_path).as_posix().strip("/")
         parts = norm_path.split("/")
 
         # Fast direct check for common directory names
@@ -231,7 +231,7 @@ class IncrementalIndexer:
         candidate_files: List[Tuple[str, str]] = []
 
         for root, dirs, files in os.walk(self.repo_dir):
-            rel_root = os.path.relpath(root, self.repo_dir).replace("\\", "/")
+            rel_root = Path(os.path.relpath(root, self.repo_dir)).as_posix()
             if rel_root != ".":
                 if self.should_ignore(rel_root):
                     dirs[:] = []
@@ -242,8 +242,8 @@ class IncrementalIndexer:
             for file in files:
                 ext = os.path.splitext(file)[1].lower()
                 if ext in (".ts", ".tsx", ".js", ".jsx", ".py"):
-                    full_p = os.path.join(root, file)
-                    rel_p = os.path.relpath(full_p, self.repo_dir).replace("\\", "/")
+                    full_p = Path(root, file).as_posix()
+                    rel_p = Path(os.path.relpath(full_p, self.repo_dir)).as_posix()
                     if not self.should_ignore(rel_p):
                         candidate_files.append((full_p, rel_p))
 

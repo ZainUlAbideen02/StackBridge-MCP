@@ -197,10 +197,6 @@ class PythonRouteParser:
 
         for node in root_node.children:
             if node.type == "decorated_definition":
-                dec_chunk = source_bytes[node.start_byte:min(node.end_byte, node.start_byte + 200)].decode("utf-8", errors="replace")
-                if not re.search(r"@([a-zA-Z0-9_]+)\.(get|post|put|delete|patch|options|head|tool|resource|call_tool)", dec_chunk):
-                    continue
-
                 line_number = node.start_point.row + 1
                 func_node = None
                 decorator_nodes: List[Node] = []

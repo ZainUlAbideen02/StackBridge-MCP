@@ -34,12 +34,12 @@ class StackGraph:
         self._edge_list: List[GraphEdge] = []
 
     def _normalize_path(self, path: Union[str, Path], base_dir: Optional[Union[str, Path]] = None) -> str:
-        p_str = str(path).replace("\\", "/")
+        p_str = Path(path).as_posix() if isinstance(path, (str, Path)) else str(path).replace("\\", "/")
         if base_dir:
-            b_str = str(base_dir).replace("\\", "/").rstrip("/")
+            b_str = Path(base_dir).as_posix().rstrip("/")
             if p_str.startswith(b_str):
                 p_str = p_str[len(b_str):].lstrip("/")
-        return p_str
+        return p_str.replace("\\", "/")
 
     @property
     def node_count(self) -> int:
