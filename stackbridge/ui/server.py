@@ -1,14 +1,12 @@
 """HTTP Server and endpoint handlers for StackBridge Web Visualizer."""
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
-import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Tuple, Union
 from urllib.parse import parse_qs, urlparse
 
 from stackbridge.core.graph import StackGraph
-
 
 TEMPLATE_PATH = Path(__file__).parent / "template.html"
 

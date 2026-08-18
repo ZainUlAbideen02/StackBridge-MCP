@@ -1,10 +1,8 @@
 """Tests for the StackBridge benchmark suite."""
 
 from pathlib import Path
-import pytest
 
 from stackbridge.benchmarks.benchmark_runner import BenchmarkSuite
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 

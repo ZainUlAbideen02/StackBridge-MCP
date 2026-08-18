@@ -1,10 +1,10 @@
 """Parser for extracting SQLAlchemy models, fields, and relationships using Tree-sitter."""
 
-import os
 import re
-from typing import Generator, List, Optional, Tuple
-from tree_sitter import Language, Node, Parser
+from typing import Generator, List, Optional
+
 import tree_sitter_python as tspython
+from tree_sitter import Language, Node, Parser
 
 from stackbridge.core.models import FieldInfo, ORMField, ORMModel, SQLAlchemyModelInfo
 
@@ -15,7 +15,9 @@ def _walk_ast(root_node: Node) -> Generator[Node, None, None]:
     visited_children = False
     while True:
         if not visited_children:
-            yield cursor.node
+            curr_node = cursor.node
+            if curr_node is not None:
+                yield curr_node
             if cursor.goto_first_child():
                 continue
         visited_children = False

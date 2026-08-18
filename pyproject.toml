@@ -5,9 +5,36 @@ build-backend = "hatchling.build"
 [project]
 name = "stackbridge"
 version = "0.1.0"
-description = "Local MCP server that traces full-stack dependencies across Next.js, FastAPI, and SQLAlchemy"
+description = "Sub-1ms cross-stack AST contract and compiler verification layer between Next.js, FastAPI, and SQLAlchemy for AI coding agents."
 readme = "README.md"
-requires-python = ">=3.11"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Zain Ul Abideen", email = "youcanreachzain@gmail.com" },
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "ast",
+    "fastapi",
+    "nextjs",
+    "sqlalchemy",
+    "cursor",
+    "claude-code",
+    "ai-agents",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Quality Assurance",
+]
 dependencies = [
     "tree-sitter>=0.22.0",
     "tree-sitter-python",
@@ -20,7 +47,18 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "build>=1.2.0",
+    "twine>=5.1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ZainUlAbideen02/StackBridge-MCP"
+Repository = "https://github.com/ZainUlAbideen02/StackBridge-MCP"
+Issues = "https://github.com/ZainUlAbideen02/StackBridge-MCP/issues"
+Changelog = "https://github.com/ZainUlAbideen02/StackBridge-MCP/blob/main/CHANGELOG.md"
 
 [project.scripts]
 stackbridge = "stackbridge.main:main"
@@ -30,3 +68,15 @@ testpaths = ["tests"]
 pythonpath = ["."]
 norecursedirs = ["real_repos", "tests/real_repos", ".stackbridge"]
 
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "E722", "E741"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_configs = true

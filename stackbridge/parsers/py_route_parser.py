@@ -1,10 +1,10 @@
 """Parser for extracting FastAPI route decorators, handlers, and parameter models using Tree-sitter."""
 
-import os
 import re
 from typing import Dict, Generator, List, Optional, Set, Tuple
-from tree_sitter import Language, Node, Parser
+
 import tree_sitter_python as tspython
+from tree_sitter import Language, Node, Parser
 
 from stackbridge.core.models import BackendRoute, EndpointParam, FastAPIRoute, HttpMethod
 
@@ -15,7 +15,9 @@ def _walk_ast(root_node: Node) -> Generator[Node, None, None]:
     visited_children = False
     while True:
         if not visited_children:
-            yield cursor.node
+            curr_node = cursor.node
+            if curr_node is not None:
+                yield curr_node
             if cursor.goto_first_child():
                 continue
         visited_children = False
@@ -294,11 +296,11 @@ def extract_fastapi_routes(code: str, file_path: str) -> List[FastAPIRoute]:
             FastAPIRoute(
                 file_path=br.file_path,
                 line=br.line_number,
-                function_name=br.function_name,
-                endpoint_path=br.raw_path,
                 http_method=primary_method,
-                response_model=br.response_model,
-                models_accessed=br.orm_models_referenced,
+                route_path=br.raw_path,
+                normalized_regex=br.normalized_path,
+                handler_name=br.function_name,
+                path_params=[p.name if isinstance(p, EndpointParam) else str(p) for p in br.path_params],
             )
         )
     return routes

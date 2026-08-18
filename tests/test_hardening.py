@@ -2,15 +2,11 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-import threading
-import pytest
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.core.indexer import IncrementalIndexer
 from stackbridge.core.models import BackendRoute, HttpMethod
 from stackbridge.parsers.py_route_parser import PythonRouteParser
 from stackbridge.verifier.engine import VerifierEngine
-
 
 REPO_ROOT = Path(__file__).parent.parent
 SYNTHETIC_DIR = REPO_ROOT / "tests" / "fixtures" / "synthetic_fullstack"
@@ -65,9 +61,9 @@ def export_data():
 def test_windows_backslash_normalization_in_graph_nodes():
     """Verifies that all node keys, file paths, and edges use POSIX forward slashes regardless of input backslashes."""
     graph = StackGraph()
-    
+
     # Add frontend call with Windows backslashes
-    from stackbridge.core.models import FrontendEndpointCall, ORMModel, ORMField
+    from stackbridge.core.models import FrontendEndpointCall, ORMField, ORMModel
     fe_call = FrontendEndpointCall(
         file_path="frontend\\components\\UserProfile.tsx",
         line_number=42,

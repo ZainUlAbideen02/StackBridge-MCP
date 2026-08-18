@@ -1,7 +1,7 @@
 """Context formatting and token reduction utility for LLM prompt delivery."""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 
 class ContextFormatter:
@@ -47,7 +47,7 @@ class ContextFormatter:
             f"### Full-Stack Dependency Trace: `{trace_data.get('target', 'unknown')}`",
             "",
         ]
-        
+
         chains = trace_data.get("chains", [])
         if chains:
             lines.append("#### Dependency Chains:")

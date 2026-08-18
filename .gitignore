@@ -1,57 +1,83 @@
-# Compiled and build artifacts
-*.pyc
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.o
-*.obj
+*.py[cod]
+*$py.class
 *.so
 *.dylib
 *.dll
-*.exe
-*.out
-
-# Dependencies
-.venv/
-venv/
-.env
-.env.local
-*.env.*
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-*.swo
-
-# Editors
-.vscode/
-.idea/
-
-# Coverage reports
-.coverage
-coverage/
-htmlcov/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
-*.pyc
-*.pyo
-*.pyd
 
 # Distribution / packaging
 dist/
 build/
 *.egg-info/
+*.egg
 .Python
-*.so
+eggs/
+.eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+downloads/
 
-# Cache & index
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables
+.env
+.env.local
+*.env.*
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage/
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type Checking & Linting
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# StackBridge Internal Database & Runtime Cache
 .stackbridge/
+*.db
+*.db-wal
+*.db-shm
 .stackbridge_cache.json
 
-# OS generated files
+# Real World Cloned Test Repositories
+tests/real_repos/
+
+# IDE & Editor Metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# Operating System Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Real world benchmark cloned repositories
-tests/real_repos/
+# Logs & Temporary Files
+*.log
+*.tmp

@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from stackbridge.verifier.py_checker import DiagnosticError
 
@@ -62,8 +62,8 @@ class AgentDiagnosticFormatter:
             )
         elif "type" in rule.lower() or "type" in msg.lower():
             return (
-                f"- **Type Signature Compatibility**: Align frontend TypeScript payload type definitions with backend "
-                f"Pydantic request/response models."
+                "- **Type Signature Compatibility**: Align frontend TypeScript payload type definitions with backend "
+                "Pydantic request/response models."
             )
         else:
             return (
@@ -74,7 +74,7 @@ class AgentDiagnosticFormatter:
     @classmethod
     def format_breakage_report(
         cls,
-        diagnostics: List[Union[DiagnosticError, Dict[str, Any]]],
+        diagnostics: Sequence[Union[DiagnosticError, Dict[str, Any]]],
         graph_nodes: Optional[List[Any]] = None,
         repo_path: str = ".",
     ) -> str:
@@ -98,8 +98,10 @@ class AgentDiagnosticFormatter:
         drift_items: List[Union[DiagnosticError, Dict[str, Any]]] = []
 
         for d in diagnostics:
-            sev = (d.severity if isinstance(d, DiagnosticError) else d.get("severity", "error")).lower()
-            rule = (d.rule if isinstance(d, DiagnosticError) else d.get("rule", "")).lower()
+            raw_sev = d.severity if isinstance(d, DiagnosticError) else d.get("severity", "error")
+            sev = (raw_sev or "error").lower()
+            raw_rule = d.rule if isinstance(d, DiagnosticError) else d.get("rule", "")
+            rule = (raw_rule or "").lower()
             if sev == "warning" or "drift" in rule or "deprecated" in rule:
                 drift_items.append(d)
             else:

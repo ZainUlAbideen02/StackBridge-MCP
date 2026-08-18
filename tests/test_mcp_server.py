@@ -1,16 +1,13 @@
 """Tests for MCP server tools, ContextFormatter token savings, and CLI entry points."""
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-import pytest
 
 from stackbridge.main import run_index, run_trace
 from stackbridge.mcp_server.formatter import ContextFormatter
 from stackbridge.mcp_server.server import get_route_contract, trace_fullstack_path
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 
@@ -108,7 +105,7 @@ def test_cli_index_and_trace(tmp_path, capsys):
     index_ret = run_index(repo_path=str(FIXTURES_DIR), output=str(custom_output))
     assert index_ret == 0
     assert custom_output.exists()
-    
+
     with open(custom_output, "r", encoding="utf-8") as f:
         graph_data = json.load(f)
     assert graph_data["node_count"] >= 6

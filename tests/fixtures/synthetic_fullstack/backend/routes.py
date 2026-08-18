@@ -1,9 +1,10 @@
 from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from .models import BillingAccount, User, get_db
+from .models import BillingAccount, get_db
 
 router = APIRouter(prefix="/api/v1")
 

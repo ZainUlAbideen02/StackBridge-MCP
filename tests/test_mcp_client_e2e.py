@@ -3,10 +3,8 @@
 import subprocess
 import sys
 from pathlib import Path
-import pytest
 
 from scripts.test_mcp_client import run_mock_client_test
-
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 TEST_CLIENT_SCRIPT = SCRIPTS_DIR / "test_mcp_client.py"

@@ -1,14 +1,10 @@
 """Tests for High-Scale Indexer, SHA-256 Incremental Caching, Ignore Rules, and Parallel AST Parsing."""
 
-import os
-from pathlib import Path
 import shutil
-import time
-import pytest
+from pathlib import Path
 
-from stackbridge.core.indexer import IncrementalIndexer, IndexReport
+from stackbridge.core.indexer import IncrementalIndexer
 from stackbridge.parsers.parallel_parser import ParallelASTParser
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 ADVANCED_FIXTURE_DIR = FIXTURES_DIR / "advanced_fullstack"

@@ -1,8 +1,6 @@
 """TypeScript and Next.js frontend breakage checker with baseline-diffing."""
 
-import os
 from typing import Dict, List, Optional, Set
-from pydantic import BaseModel
 
 from stackbridge.parsers.ts_fetch_parser import TypeScriptFetchParser
 from stackbridge.verifier.py_checker import DiagnosticError

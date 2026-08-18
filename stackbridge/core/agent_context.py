@@ -1,11 +1,9 @@
 """AGENTS.md Context Generator for AI Pair Programming Assistants."""
 
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional, Union
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.core.models import HttpMethod
 
 
 class AgentContextGenerator:
@@ -65,8 +63,8 @@ class AgentContextGenerator:
             c_name = m.get("class_name") or m.get("id", "").split("::")[-1]
             t_name = m.get("table_name") or c_name.lower()
             file_p = m.get("file_path", "")
-            fields = m.get("fields", [])
-            field_names = ", ".join([f.get("name") for f in fields if isinstance(f, dict) and "name" in f]) or "—"
+            m_fields = m.get("fields", [])
+            field_names = ", ".join([str(f.get("name")) for f in m_fields if isinstance(f, dict) and f.get("name") is not None]) or "—"
 
             lines.append(
                 f"| `{c_name}` | `{t_name}` | `{file_p}` | `{field_names}` |"

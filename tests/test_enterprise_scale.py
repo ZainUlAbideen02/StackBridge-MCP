@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-import pytest
 
 from stackbridge.core.config import StackBridgeConfig
 from stackbridge.core.git_delta import GitDeltaIndexer
@@ -11,7 +10,6 @@ from stackbridge.core.models import BackendRoute, FrontendEndpointCall, HttpMeth
 from stackbridge.core.sqlite_store import SQLiteStore
 from stackbridge.verifier.agent_formatter import AgentDiagnosticFormatter
 from stackbridge.verifier.py_checker import DiagnosticError
-
 
 REPO_ROOT = Path(__file__).parent.parent
 SYNTHETIC_DIR = REPO_ROOT / "tests" / "fixtures" / "synthetic_fullstack"

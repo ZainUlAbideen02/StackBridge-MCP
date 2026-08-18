@@ -1,22 +1,11 @@
 """SQLite Store with Recursive CTE Blast-Radius Traversal for Enterprise Repositories."""
 
 import json
-import os
-from pathlib import Path
 import sqlite3
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Set, Union
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.core.models import (
-    BackendRoute,
-    EndpointParam,
-    FrontendEndpointCall,
-    GraphEdge,
-    GraphNode,
-    HttpMethod,
-    ORMField,
-    ORMModel,
-)
 
 
 class SQLiteStore:
@@ -170,10 +159,10 @@ class SQLiteStore:
                 SELECT ?, 0, ?
                 UNION
                 -- Downstream & Upstream edges
-                SELECT 
-                    CASE 
-                        WHEN e.source = b.node_id THEN e.target 
-                        ELSE e.source 
+                SELECT
+                    CASE
+                        WHEN e.source = b.node_id THEN e.target
+                        ELSE e.source
                     END,
                     b.depth + 1,
                     b.path || ' -> ' || CASE WHEN e.source = b.node_id THEN e.target ELSE e.source END

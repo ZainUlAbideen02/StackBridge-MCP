@@ -3,11 +3,10 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
 import pytest
 
 from stackbridge.verifier.engine import VerifierEngine
-from stackbridge.verifier.py_checker import DiagnosticError
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 MODELS_FIXTURE = FIXTURES_DIR / "backend" / "models.py"

@@ -1,9 +1,8 @@
 """Tests for AgentDiagnosticFormatter and Two-Tier mtime/size Caching."""
 
 import os
-from pathlib import Path
 import time
-import pytest
+from pathlib import Path
 from unittest.mock import patch
 
 from stackbridge.core.indexer import IncrementalIndexer

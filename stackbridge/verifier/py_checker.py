@@ -1,13 +1,11 @@
 """Python type and schema breakage checker with baseline-diffing."""
 
-import os
-import re
-from typing import Dict, List, Optional, Set, Tuple
-from tree_sitter import Language, Node, Parser
-import tree_sitter_python as tspython
-from pydantic import BaseModel, Field
+from typing import Dict, List, Optional, Set
 
-from stackbridge.core.models import ORMModel
+import tree_sitter_python as tspython
+from pydantic import BaseModel
+from tree_sitter import Language, Parser
+
 from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser
 
 
@@ -145,7 +143,7 @@ class PythonTypeVerifier:
         Filters out pre-existing errors in baseline_files and reports only newly introduced errors.
         """
         current_diagnostics = self.verify_files(current_files)
-        
+
         if not baseline_files:
             return current_diagnostics
 

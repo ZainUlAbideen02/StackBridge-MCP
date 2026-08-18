@@ -1,13 +1,11 @@
 """Integration tests for nested sub-routers, React Query parsing, and StackGuardEngine."""
 
 from pathlib import Path
-import pytest
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.parsers.py_route_parser import PythonRouteParser
 from stackbridge.parsers.ts_fetch_parser import extract_nextjs_fetches
 from stackbridge.verifier.guard import StackGuardEngine
-
 
 ADVANCED_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "advanced_fullstack"
 SYNTHETIC_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"

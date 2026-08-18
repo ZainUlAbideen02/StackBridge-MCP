@@ -1,7 +1,8 @@
 """Matching engine between frontend fetch calls and backend routes with AST-aware confidence scoring."""
 
 import re
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
+
 from stackbridge.core.models import (
     BackendRoute,
     FastAPIRoute,
@@ -39,11 +40,11 @@ def _is_param_segment(segment: str) -> Tuple[bool, str]:
 
 
 def calculate_route_confidence(
-    fe_path: str, be_path: str, fe_method: Union[HttpMethod, str], be_methods: List[Union[HttpMethod, str]]
+    fe_path: str, be_path: str, fe_method: Union[HttpMethod, str], be_methods: Sequence[Union[HttpMethod, str]]
 ) -> Tuple[float, Dict[str, str]]:
     """
     Calculates the confidence score (0.0 to 1.0) and parameter mappings between frontend call and backend route.
-    
+
     Scoring model:
     - Static identical segment: 1.0
     - Dynamic parameter segment: 0.40
@@ -151,29 +152,29 @@ def match_routes(
 ) -> List[RouteMatchResult]:
     """Match frontend fetch calls to backend FastAPI routes."""
     results: List[RouteMatchResult] = []
-    
+
     for fetch in fetches:
         best_match: Optional[RouteMatchResult] = None
         best_confidence = 0.0
-        
+
         fetch_pattern = fetch.normalized_pattern
         if api_prefix_strip and fetch_pattern.startswith(api_prefix_strip):
             fetch_pattern = fetch_pattern[len(api_prefix_strip):]
             if not fetch_pattern.startswith("/"):
                 fetch_pattern = "/" + fetch_pattern
-        
+
         for route in routes:
             if fetch.http_method.upper() != route.http_method.upper():
                 continue
-            
+
             route_regex = route.normalized_regex
             if not _paths_match(fetch_pattern, route_regex):
                 continue
-            
+
             confidence = 0.0
             match_strategy = ""
             notes: Optional[str] = None
-            
+
             if not fetch.is_template and not route.path_params:
                 fetch_normalized = _normalize_path_for_comparison(fetch_pattern)
                 route_normalized = _normalize_path_for_comparison(route.route_path)
@@ -181,11 +182,11 @@ def match_routes(
                     confidence = 1.0
                     match_strategy = "exact_static_match"
                     notes = "Exact method and static path match"
-            
+
             if fetch.is_template or route.path_params:
                 fetch_segments = _count_path_segments(fetch_pattern)
                 route_segments = _count_path_segments(route.route_path)
-                
+
                 if fetch_segments == route_segments and _paths_match(fetch_pattern, route_regex):
                     confidence = 0.88
                     match_strategy = "template_slug_alignment"
@@ -195,7 +196,7 @@ def match_routes(
                     if route.path_params:
                         param_notes.append(f"backend params: {route.path_params}")
                     notes = "; ".join(param_notes) if param_notes else "Template path alignment"
-            
+
             if confidence > best_confidence:
                 best_confidence = confidence
                 best_match = RouteMatchResult(
@@ -206,8 +207,8 @@ def match_routes(
                     match_strategy=match_strategy,
                     notes=notes
                 )
-        
+
         if best_match:
             results.append(best_match)
-    
+
     return results

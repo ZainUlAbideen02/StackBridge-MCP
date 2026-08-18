@@ -1,6 +1,7 @@
 from typing import Generator
-from sqlalchemy import Column, Float, ForeignKey, Integer, String, create_engine
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
+
+from sqlalchemy import Column, Float, ForeignKey, String
+from sqlalchemy.orm import Session, declarative_base, relationship
 
 Base = declarative_base()
 

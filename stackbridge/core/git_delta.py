@@ -1,9 +1,9 @@
 """Git Delta Indexer for fast, incremental full-stack AST updates."""
 
 import os
-from pathlib import Path
 import subprocess
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from pathlib import Path
+from typing import List, Optional, Set, Union
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.core.indexer import IncrementalIndexer
@@ -79,7 +79,6 @@ class GitDeltaIndexer:
         Incrementally processes only changed files and persists the updated graph to SQLite.
         """
         indexer = IncrementalIndexer(self.repo_dir)
-        files_to_update = changed_files if changed_files is not None else self.get_changed_files()
 
         # If specific changed files provided or discovered, run incremental index
         updated_graph, _ = indexer.index(use_cache=True)

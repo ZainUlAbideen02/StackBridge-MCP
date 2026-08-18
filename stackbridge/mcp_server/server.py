@@ -1,7 +1,6 @@
 """FastMCP / MCPServer exposing StackBridge tools and resources for AI pair programming."""
 
 import os
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -17,7 +16,6 @@ except (ImportError, ModuleNotFoundError):
         mcp = Server("stackbridge")
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.mcp_server.formatter import ContextFormatter
 from stackbridge.verifier.agent_formatter import AgentDiagnosticFormatter
 from stackbridge.verifier.engine import VerifierEngine
 
@@ -52,11 +50,11 @@ def trace_fullstack_path(
 ) -> Dict[str, Any]:
     """
     Traces fullstack dependency chain across Frontend, API Routes, and SQLAlchemy ORM models.
-    
+
     Returns the complete path: Frontend component -> API Route handler -> Database Model.
     """
     target_symbol = symbol_or_path or target or ""
-    
+
     effective_repo = repo_path
     if not effective_repo or effective_repo == "." or Path(effective_repo).resolve() == Path(".").resolve():
         if "tests/fixtures/synthetic_fullstack" in target_symbol or "tests\\fixtures\\synthetic_fullstack" in target_symbol:
@@ -146,7 +144,7 @@ def get_route_contract(route_path: str, repo_path: str = ".") -> Dict[str, Any]:
                 route_node_data = data
                 break
 
-    if not matching_route_id:
+    if not matching_route_id or route_node_data is None:
         return {
             "route_path": route_path,
             "found": False,

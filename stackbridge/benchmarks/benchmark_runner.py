@@ -1,16 +1,16 @@
 """Benchmarking runner for AST parsing, Graph construction, blast radius traversal, and token efficiency."""
 
-import json
 import os
 import sys
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
+
 from pydantic import BaseModel, Field
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.mcp_server.formatter import ContextFormatter
-from stackbridge.mcp_server.server import get_route_contract, trace_fullstack_path
+from stackbridge.mcp_server.server import get_route_contract
 from stackbridge.verifier.engine import VerifierEngine
 
 
@@ -123,11 +123,9 @@ class BenchmarkSuite:
         # Pick route dynamically
         graph = StackGraph.build_from_repo(str(self.repo_path))
         target_route = "/api/v1/users/{user_id}/billing"
-        route_data = None
         for _, data in graph.graph.nodes(data=True):
             if data.get("type") == "route":
                 target_route = data.get("normalized_path") or data.get("raw_path") or target_route
-                route_data = data
                 break
 
         contract = get_route_contract(str(self.repo_path), target_route)
@@ -172,8 +170,8 @@ class BenchmarkSuite:
             modified_code = "class DummyModel:\n    # id removed\n"
         else:
             rel_file = candidate_py.relative_to(self.repo_path).as_posix()
-            with open(candidate_py, "r", encoding="utf-8") as f:
-                original_code = f.read()
+            with open(candidate_py, "r", encoding="utf-8") as file_obj:
+                original_code = file_obj.read()
 
             if 'plan = Column(String, nullable=False, default="free")' in original_code:
                 modified_code = original_code.replace(

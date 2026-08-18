@@ -4,15 +4,15 @@ import fnmatch
 import hashlib
 import json
 import os
-from pathlib import Path
 import time
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
     import pathspec
     HAS_PATHSPEC = True
 except (ImportError, ModuleNotFoundError):
-    pathspec = None
+    pathspec = None  # type: ignore[assignment]
     HAS_PATHSPEC = False
 
 from stackbridge.core.graph import StackGraph
@@ -26,7 +26,6 @@ from stackbridge.core.models import (
 )
 from stackbridge.core.route_matcher import match_frontend_call_to_routes
 from stackbridge.parsers.py_route_parser import PythonRouteParser
-
 
 DEFAULT_IGNORE_PATTERNS: List[str] = [
     ".git",
@@ -116,7 +115,7 @@ class IncrementalIndexer:
         if ignore_patterns:
             self.ignore_patterns.extend(ignore_patterns)
 
-        self._pathspec_matcher = None
+        self._pathspec_matcher: Optional[Any] = None
         self._load_gitignore_patterns()
         from stackbridge.parsers.parallel_parser import ParallelASTParser
 
@@ -174,11 +173,14 @@ class IncrementalIndexer:
 
         self.ignore_patterns = collected_lines
 
-        if HAS_PATHSPEC and pathspec:
+        if HAS_PATHSPEC and pathspec is not None:
             try:
-                self._pathspec_matcher = pathspec.PathSpec.from_lines("gitwildmatch", self.ignore_patterns)
+                self._pathspec_matcher = pathspec.PathSpec.from_lines("gitignore", self.ignore_patterns)  # type: ignore[assignment]
             except Exception:
-                self._pathspec_matcher = None
+                try:
+                    self._pathspec_matcher = pathspec.PathSpec.from_lines("gitwildmatch", self.ignore_patterns)  # type: ignore[assignment]
+                except Exception:
+                    self._pathspec_matcher = None
 
     def should_ignore(self, rel_path: str) -> bool:
         """Checks if a relative path matches default or .gitignore exclusion rules using pathspec or fallback."""
@@ -595,8 +597,8 @@ class IncrementalIndexer:
                 if base_prefix and not route_copy.raw_path.startswith(base_prefix):
                     route_copy.raw_path = py_parser.resolve_subrouter_prefix(base_prefix, route_copy.raw_path)
                     route_copy.normalized_path = py_parser.resolve_subrouter_prefix(base_prefix, route_copy.normalized_path)
-                r_id = sg.add_backend_route(route_copy)
-                parsed_routes.append((r_id, route_copy))
+                route_id = sg.add_backend_route(route_copy)
+                parsed_routes.append((route_id, route_copy))
 
         # 4. Link Frontend -> Backend Routes
         all_backend_routes = [r for _, r in parsed_routes]
@@ -608,13 +610,13 @@ class IncrementalIndexer:
             matches = match_frontend_call_to_routes(fe_call, all_backend_routes, min_confidence=0.5)
             for match in matches:
                 target_route = match.backend_route
-                r_id = route_func_to_id.get(f"{target_route.file_path}::{target_route.function_name}")
-                if not r_id:
-                    r_id = route_to_id.get(target_route.normalized_path)
-                if r_id:
+                matched_r_id = route_func_to_id.get(f"{target_route.file_path}::{target_route.function_name}")
+                if not matched_r_id:
+                    matched_r_id = route_to_id.get(target_route.normalized_path)
+                if matched_r_id:
                     sg.link_frontend_to_route(
                         fe_node_id=fe_id,
-                        route_node_id=r_id,
+                        route_node_id=matched_r_id,
                         confidence=match.confidence,
                         is_exact=match.is_exact,
                         param_mappings=match.param_mappings,

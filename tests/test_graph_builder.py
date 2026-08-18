@@ -1,13 +1,9 @@
 """Tests for SQLAlchemy parser, StackGraph unified repo builder, blast radius analysis, and caching."""
 
-import json
-import os
 from pathlib import Path
-import pytest
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.parsers.sqlalchemy_parser import SQLAlchemyParser, extract_sqlalchemy_models
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 MODELS_FIXTURE = FIXTURES_DIR / "backend" / "models.py"
@@ -45,7 +41,7 @@ def test_extract_sqlalchemy_models_standalone():
     assert MODELS_FIXTURE.exists(), f"Models fixture not found at {MODELS_FIXTURE}"
     with open(MODELS_FIXTURE, "r", encoding="utf-8") as f:
         code = f.read()
-    
+
     models = extract_sqlalchemy_models(code, str(MODELS_FIXTURE))
     assert len(models) == 2
     class_names = [m.class_name for m in models]
@@ -99,7 +95,7 @@ def test_stack_graph_build_from_repo():
 
 def test_blast_radius_traversal():
     sg = StackGraph.build_from_repo(str(FIXTURES_DIR))
-    
+
     blast = sg.get_blast_radius("backend/models.py::BillingAccount")
     assert blast["found"] is True
     assert blast["target"] == "backend/models.py::BillingAccount"
@@ -108,7 +104,7 @@ def test_blast_radius_traversal():
     assert "frontend/UserProfile.tsx" in blast["affected_files"]
     assert any("UserProfile.tsx" in n for n in blast["affected_nodes"])
     assert any("get_user_billing" in n for n in blast["affected_nodes"])
-    
+
     # Check affected frontend list
     assert len(blast["affected_frontend"]) >= 1
     assert any("UserProfile.tsx" in fe["file_path"] for fe in blast["affected_frontend"])

@@ -1,16 +1,16 @@
 """Continuous Background File Watcher and Graph Warmer for StackBridge-MCP."""
 
 import os
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from stackbridge.core.git_delta import GitDeltaIndexer
 from stackbridge.core.graph import StackGraph
 
 try:
-    from watchdog.events import FileSystemEventHandler, FileSystemEvent
+    from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
     HAS_WATCHDOG = True
 except ImportError:
@@ -70,8 +70,8 @@ class BackgroundWatcher:
 
         self._handler = DebouncedChangeHandler(debounce_sec=self.debounce_sec, callback=self._handle_debounced_batch)
         self._running = False
-        self._observer = None
-        self._poll_thread = None
+        self._observer: Optional[Any] = None
+        self._poll_thread: Optional[threading.Thread] = None
 
     def is_running(self) -> bool:
         return self._running

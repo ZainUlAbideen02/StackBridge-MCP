@@ -1,14 +1,10 @@
 """Unit tests for AgentContextGenerator and TestImpactSelector."""
 
-import os
 from pathlib import Path
-import pytest
 
 from stackbridge.core.agent_context import AgentContextGenerator
 from stackbridge.core.graph import StackGraph
-from stackbridge.core.models import BackendRoute, EndpointParam, FrontendEndpointCall, HttpMethod, ORMModel
 from stackbridge.core.test_impact import TestImpactSelector
-
 
 REPO_ROOT = Path(__file__).parent.parent
 SYNTHETIC_DIR = REPO_ROOT / "tests" / "fixtures" / "synthetic_fullstack"

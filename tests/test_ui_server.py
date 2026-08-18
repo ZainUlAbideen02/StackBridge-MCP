@@ -1,11 +1,10 @@
 """Tests for StackBridge Web Visualizer server, template, and API endpoints."""
 
 import json
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 from urllib.request import urlopen
-import pytest
 
 from stackbridge.ui.server import (
     create_ui_server,
@@ -14,7 +13,6 @@ from stackbridge.ui.server import (
     get_ui_html,
     handle_ui_request,
 )
-
 
 SYNTHETIC_FIXTURES_DIR = Path(__file__).parent / "fixtures" / "synthetic_fullstack"
 TEMPLATE_FILE = Path(__file__).parent.parent / "stackbridge" / "ui" / "template.html"

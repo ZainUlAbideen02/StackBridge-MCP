@@ -1,11 +1,10 @@
 """Parallel AST Parser for TypeScript/TSX, FastAPI routes, and SQLAlchemy models."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import os
-from pathlib import Path
 import threading
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from stackbridge.core.models import BackendRoute, FrontendEndpointCall, ORMModel
 from stackbridge.parsers.py_route_parser import PythonRouteParser
@@ -60,8 +59,10 @@ class ParallelASTParser:
         elif ext == ".py":
             try:
                 content_str = content_bytes.decode("utf-8", errors="replace")
-                prefixes = py_route_parser._extract_router_prefixes(None, content_bytes)
-                imports, includes = py_route_parser._extract_imports_and_includes(None, content_bytes)
+                tree = py_route_parser.parser.parse(content_bytes)
+                root_node = tree.root_node
+                prefixes = py_route_parser._extract_router_prefixes(root_node, content_bytes)
+                imports, includes = py_route_parser._extract_imports_and_includes(root_node, content_bytes)
                 routes = py_route_parser.parse_code(content_str, file_path=rel_path)
                 models = sql_parser.parse_code(content_str, file_path=rel_path)
                 py_data = {
@@ -88,7 +89,6 @@ class ParallelASTParser:
         max_workers: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Concurrently parses a list of file paths or (full_path, rel_path) tuples."""
-        workers = max_workers or self.max_workers
         normalized_inputs: List[Tuple[str, str]] = []
 
         for item in file_inputs:

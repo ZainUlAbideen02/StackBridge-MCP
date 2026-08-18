@@ -1,12 +1,11 @@
 """Predictive Test Impact Selector for Full-Stack Repositories."""
 
 import os
-from pathlib import Path
 import re
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Union
 
 from stackbridge.core.graph import StackGraph
-from stackbridge.core.models import BackendRoute, ORMModel
 
 
 class TestImpactSelector:
