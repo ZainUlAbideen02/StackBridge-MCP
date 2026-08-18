@@ -111,6 +111,17 @@ def run_serve(transport: str = "stdio") -> int:
         return 0
 
 
+def run_init_agents(repo_path: str, output: Optional[str] = None) -> int:
+    """Generates an AGENTS.md architecture and boundary guide for coding agents."""
+    from stackbridge.core.agent_context import AgentContextGenerator
+
+    repo = Path(repo_path).resolve()
+    print(f"Generating AGENTS.md for repository at {repo}...")
+    written_path = AgentContextGenerator.write_agents_md(repo_path=str(repo), output_path=output)
+    print(f"AGENTS.md successfully generated at {written_path}")
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="stackbridge",
@@ -124,6 +135,11 @@ def main() -> None:
     index_parser.add_argument("--output", "-o", default=None, help="Output path for serialized graph JSON")
     index_parser.add_argument("--no-cache", action="store_true", default=False, help="Bypass incremental cache and re-index all files")
     index_parser.add_argument("--force", "-f", dest="no_cache", action="store_true", default=False, help="Force full re-indexing and bypass cache")
+
+    # init-agents command
+    agents_parser = subparsers.add_parser("init-agents", help="Generate AGENTS.md architecture and boundary context guide")
+    agents_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
+    agents_parser.add_argument("--output", "-o", default=None, help="Custom output path for generated AGENTS.md")
 
     # trace command
     trace_parser = subparsers.add_parser("trace", help="Trace full-stack blast radius for a model or route")
@@ -152,6 +168,8 @@ def main() -> None:
 
     if args.command == "index":
         sys.exit(run_index(args.repo_path, args.output, getattr(args, "no_cache", False)))
+    elif args.command == "init-agents":
+        sys.exit(run_init_agents(args.repo_path, args.output))
     elif args.command == "trace":
         target = args.target or args.pos_target
         if not target:
