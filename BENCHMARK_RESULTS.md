@@ -5,31 +5,31 @@
 ## 1. Executive Summary
 - **Target Repository:** `C:\Users\youca\OneDrive\Desktop\StackBridge-MCP\tests\fixtures\synthetic_fullstack`
 - **Benchmark Iterations:** 3 runs (averaged)
-- **Total Suite Latency:** **21.73 ms**
+- **Total Suite Latency:** **21.56 ms**
 - **Status:** 🟢 **4/4 Benchmarks Passed (100%)**
 
 ## 2. Performance & Latency Matrix
 
 | Benchmark | Avg Latency | Min / Max Latency | Status | Key Metrics |
 | :--- | :--- | :--- | :--- | :--- |
-| **AST Parsing & Graph Construction** | `7.49 ms` | `5.51ms / 10.65ms` | 🟢 Passed | `nodes: 6`, `edges: 5`, `throughput_nodes_per_sec: 563.3` |
-| **Blast-Radius Traversal Latency** | `0.26 ms` | `0.17ms / 0.44ms` | 🟢 Passed | `target: backend/models.py::BillingAccount`, `found: True`, `affected_files_count: 3` |
+| **AST Parsing & Graph Construction** | `7.30 ms` | `5.48ms / 9.86ms` | 🟢 Passed | `nodes: 6`, `edges: 5`, `throughput_nodes_per_sec: 608.3` |
+| **Blast-Radius Traversal Latency** | `0.34 ms` | `0.18ms / 0.61ms` | 🟢 Passed | `target: backend/models.py::BillingAccount`, `found: True`, `affected_files_count: 3` |
 | **Token Efficiency & Reduction** | `1.00 ms` | `1.00ms / 1.00ms` | 🟢 Passed | `raw_tokens: 1062`, `slice_tokens: 52`, `tokens_saved: 1010` |
-| **Baseline-Diffed Compiler Verification** | `12.98 ms` | `11.13ms / 16.26ms` | 🟢 Passed | `has_breakage: True`, `error_count: 1`, `impacted_files: 3` |
+| **Baseline-Diffed Compiler Verification** | `12.92 ms` | `10.94ms / 16.74ms` | 🟢 Passed | `has_breakage: True`, `error_count: 1`, `impacted_files: 3` |
 
 ## 3. Detailed Benchmark Breakdown
 
 ### ⚡ AST Parsing & Graph Construction
-- **Latency:** `7.49 ms`
-- **Details:** Parsed full-stack repo into 6 nodes and 5 edges in 10.65ms
+- **Latency:** `7.30 ms`
+- **Details:** Parsed full-stack repo into 6 nodes and 5 edges in 9.86ms
 - **Metrics:**
   * `nodes`: `6`
   * `edges`: `5`
-  * `throughput_nodes_per_sec`: `563.28`
+  * `throughput_nodes_per_sec`: `608.26`
 
 ### ⚡ Blast-Radius Traversal Latency
-- **Latency:** `0.26 ms`
-- **Details:** Traced blast radius for backend/models.py::BillingAccount in 0.436ms
+- **Latency:** `0.34 ms`
+- **Details:** Traced blast radius for backend/models.py::BillingAccount in 0.613ms
 - **Metrics:**
   * `target`: `backend/models.py::BillingAccount`
   * `found`: `True`
@@ -46,8 +46,8 @@
   * `percentage_saved`: `95.1`
 
 ### ⚡ Baseline-Diffed Compiler Verification
-- **Latency:** `12.98 ms`
-- **Details:** Verified 3 impacted files in 16.26ms with 1 breakage diagnostics detected
+- **Latency:** `12.92 ms`
+- **Details:** Verified 3 impacted files in 16.74ms with 1 breakage diagnostics detected
 - **Metrics:**
   * `has_breakage`: `True`
   * `error_count`: `1`
