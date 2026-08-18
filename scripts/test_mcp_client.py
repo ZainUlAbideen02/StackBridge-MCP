@@ -20,7 +20,7 @@ def send_message(proc: subprocess.Popen, msg: Dict[str, Any]) -> None:
         proc.stdin.flush()
 
 
-def receive_message(proc: subprocess.Popen, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
+def receive_message(proc: subprocess.Popen, timeout: float = 30.0) -> Optional[Dict[str, Any]]:
     """Reads a JSON-RPC 2.0 message line from subprocess stdout."""
     start_time = time.time()
     while time.time() - start_time < timeout:

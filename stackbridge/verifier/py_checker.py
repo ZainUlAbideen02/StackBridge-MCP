@@ -63,33 +63,33 @@ class PythonTypeVerifier:
         # Map local variable -> Model class name (e.g., billing = db.query(BillingAccount)... -> billing: BillingAccount)
         var_to_model: Dict[str, str] = {}
 
-        def find_model_instantiations_and_queries(node: Node) -> None:
-            # 1. Look for assignments: var = db.query(ModelName)... or var = ModelName(...)
+        # 1. Look for assignments: var = db.query(ModelName)... or var = ModelName(...)
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
             if node.type == "assignment":
                 left = node.child_by_field_name("left")
                 right = node.child_by_field_name("right")
                 if left and right:
-                    var_name = source_bytes[left.start_byte:left.end_byte].decode("utf-8").strip()
-                    right_text = source_bytes[right.start_byte:right.end_byte].decode("utf-8")
-                    
+                    var_name = source_bytes[left.start_byte:left.end_byte].decode("utf-8", errors="replace").strip()
+                    right_text = source_bytes[right.start_byte:right.end_byte].decode("utf-8", errors="replace")
+
                     for model_name in models_map.keys():
                         if f"query({model_name})" in right_text or f"select({model_name})" in right_text or f"{model_name}(" in right_text:
                             var_to_model[var_name] = model_name
-
-            for child in node.children:
-                find_model_instantiations_and_queries(child)
-
-        find_model_instantiations_and_queries(tree.root_node)
+            stack.extend(node.children)
 
         # 2. Check attribute accesses: var.attr or ModelName.attr
-        def check_attribute_accesses(node: Node) -> None:
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
             if node.type == "attribute":
                 obj_node = node.child_by_field_name("object")
                 attr_node = node.child_by_field_name("attribute")
                 if obj_node and attr_node:
-                    obj_name = source_bytes[obj_node.start_byte:obj_node.end_byte].decode("utf-8").strip()
-                    attr_name = source_bytes[attr_node.start_byte:attr_node.end_byte].decode("utf-8").strip()
-                    
+                    obj_name = source_bytes[obj_node.start_byte:obj_node.end_byte].decode("utf-8", errors="replace").strip()
+                    attr_name = source_bytes[attr_node.start_byte:attr_node.end_byte].decode("utf-8", errors="replace").strip()
+
                     target_model = None
                     if obj_name in var_to_model:
                         target_model = var_to_model[obj_name]
@@ -111,11 +111,8 @@ class PythonTypeVerifier:
                                     source="python",
                                 )
                             )
+            stack.extend(node.children)
 
-            for child in node.children:
-                check_attribute_accesses(child)
-
-        check_attribute_accesses(tree.root_node)
         return diagnostics
 
     def verify_files(

@@ -11,15 +11,20 @@ from stackbridge.mcp_server.formatter import ContextFormatter
 from stackbridge.mcp_server.server import get_route_contract, trace_fullstack_path
 
 
-def run_index(repo_path: str, output: Optional[str] = None) -> int:
-    """Builds and exports the dependency graph."""
+def run_index(repo_path: str, output: Optional[str] = None, no_cache: bool = False) -> int:
+    """Builds and exports the dependency graph with incremental caching."""
+    from stackbridge.core.indexer import IncrementalIndexer
+
     repo = Path(repo_path).resolve()
     print(f"Indexing repository at {repo}...")
-    graph = StackGraph.build_from_repo(str(repo))
+    indexer = IncrementalIndexer(repo_path=str(repo))
+    graph, report = indexer.index(use_cache=not no_cache)
 
     out_path = Path(output) if output else repo / ".stackbridge" / "graph.json"
     graph.export_json(out_path)
-    print(f"Indexed {graph.node_count} nodes and {graph.edge_count} edges.")
+
+    cache_info = f"[Cache: {report.cached_files_hit}/{report.total_files} hit, {report.modified_files} modified | {report.duration_ms:.2f}ms]"
+    print(f"Indexed {graph.node_count} nodes and {graph.edge_count} edges. {cache_info}")
     print(f"Graph written to {out_path}")
     return 0
 
@@ -117,6 +122,7 @@ def main() -> None:
     index_parser = subparsers.add_parser("index", help="Index repository and generate dependency graph")
     index_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
     index_parser.add_argument("--output", "-o", default=None, help="Output path for serialized graph JSON")
+    index_parser.add_argument("--no-cache", action="store_true", default=False, help="Bypass incremental cache and re-index all files")
 
     # trace command
     trace_parser = subparsers.add_parser("trace", help="Trace full-stack dependency chains")
@@ -143,7 +149,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "index":
-        sys.exit(run_index(args.repo_path, args.output))
+        sys.exit(run_index(args.repo_path, args.output, getattr(args, "no_cache", False)))
     elif args.command == "trace":
         sys.exit(run_trace(args.repo_path, args.target))
     elif args.command == "guard":

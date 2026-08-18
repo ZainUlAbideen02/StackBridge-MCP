@@ -157,130 +157,13 @@ class StackGraph:
         )
 
     @classmethod
-    def build_from_repo(cls, repo_path: Union[str, Path], api_prefix_strip: Optional[str] = None) -> "StackGraph":
+    def build_from_repo(cls, repo_path: Union[str, Path], api_prefix_strip: Optional[str] = None, use_cache: bool = True) -> "StackGraph":
         """Scans a repository, parses TypeScript, Python FastAPI routes, and SQLAlchemy models, and builds graph."""
-        sg = cls()
-        repo_dir = Path(repo_path).resolve()
+        from stackbridge.core.indexer import IncrementalIndexer
 
-        ts_parser = TypeScriptFetchParser()
-        py_route_parser = PythonRouteParser()
-        sql_parser = SQLAlchemyParser()
-
-        parsed_fe_calls: List[tuple[str, FrontendEndpointCall]] = []
-        parsed_routes: List[tuple[str, BackendRoute]] = []
-        parsed_models: List[tuple[str, ORMModel]] = []
-
-        py_files_data: Dict[str, Dict[str, Any]] = {}
-
-        for root, dirs, files in os.walk(repo_dir):
-            dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache")]
-            for file in files:
-                full_file_path = os.path.join(root, file)
-                rel_file_path = os.path.relpath(full_file_path, repo_dir).replace("\\", "/")
-                ext = os.path.splitext(file)[1].lower()
-
-                if ext in (".ts", ".tsx", ".js", ".jsx"):
-                    try:
-                        calls = ts_parser.parse_file(full_file_path)
-                        for c in calls:
-                            c.file_path = rel_file_path
-                            fe_id = sg.add_frontend_call(c)
-                            parsed_fe_calls.append((fe_id, c))
-                    except Exception:
-                        pass
-
-                elif ext == ".py":
-                    try:
-                        with open(full_file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        source_bytes = content.encode("utf-8")
-                        tree = py_route_parser.parser.parse(source_bytes)
-                        prefixes = py_route_parser._extract_router_prefixes(tree.root_node, source_bytes)
-                        imports, includes = py_route_parser._extract_imports_and_includes(tree.root_node, source_bytes)
-                        routes = py_route_parser.parse_code(content, file_path=rel_file_path)
-
-                        py_files_data[rel_file_path] = {
-                            "routes": routes,
-                            "prefixes": prefixes,
-                            "imports": imports,
-                            "includes": includes,
-                        }
-                    except Exception:
-                        pass
-
-                    try:
-                        models = sql_parser.parse_file(full_file_path)
-                        for m in models:
-                            m.file_path = rel_file_path
-                            m_id = sg.add_orm_model(m)
-                            parsed_models.append((m_id, m))
-                    except Exception:
-                        pass
-
-        # Resolve cross-file router prefixes
-        file_base_prefixes: Dict[str, str] = {}
-        for file_path, data in py_files_data.items():
-            prefixes = data["prefixes"]
-            includes = data["includes"]
-            imports = data["imports"]
-
-            # Map to imported files
-            for parent_var, target_var, inc_prefix in includes:
-                target_p = prefixes.get(target_var, "")
-                if not target_p and inc_prefix:
-                    target_p = inc_prefix
-                
-                if target_p:
-                    imported_mod = imports.get(target_var, "")
-                    if imported_mod:
-                        mod_path_suffix = imported_mod.replace(".", "/")
-                        for other_file in py_files_data.keys():
-                            if other_file.endswith(f"{mod_path_suffix}.py") or mod_path_suffix in other_file:
-                                file_base_prefixes[other_file] = target_p
-
-        # Register routes with resolved prefixes
-        for file_path, data in py_files_data.items():
-            base_prefix = file_base_prefixes.get(file_path, "")
-            for r in data["routes"]:
-                if base_prefix and not r.raw_path.startswith(base_prefix):
-                    r.raw_path = py_route_parser.resolve_subrouter_prefix(base_prefix, r.raw_path)
-                    r.normalized_path = py_route_parser.resolve_subrouter_prefix(base_prefix, r.normalized_path)
-                r_id = sg.add_backend_route(r)
-                parsed_routes.append((r_id, r))
-
-        all_backend_routes = [r for _, r in parsed_routes]
-        route_to_id = {r.raw_path: r_id for r_id, r in parsed_routes}
-        route_to_id.update({r.normalized_path: r_id for r_id, r in parsed_routes})
-        route_func_to_id = {f"{r.file_path}::{r.function_name}": r_id for r_id, r in parsed_routes}
-
-        for fe_id, fe_call in parsed_fe_calls:
-            matches = match_frontend_call_to_routes(fe_call, all_backend_routes, min_confidence=0.5)
-            for match in matches:
-                target_route = match.backend_route
-                r_id = route_func_to_id.get(f"{target_route.file_path}::{target_route.function_name}")
-                if not r_id:
-                    r_id = route_to_id.get(target_route.normalized_path)
-                if r_id:
-                    sg.link_frontend_to_route(
-                        fe_node_id=fe_id,
-                        route_node_id=r_id,
-                        confidence=match.confidence,
-                        is_exact=match.is_exact,
-                        param_mappings=match.param_mappings,
-                    )
-
-        model_name_to_id = {m.class_name: m_id for m_id, m in parsed_models}
-        for r_id, route in parsed_routes:
-            for model_name in route.orm_models_referenced:
-                if model_name in model_name_to_id:
-                    sg.link_route_to_model(r_id, model_name_to_id[model_name])
-
-        for m_id, model in parsed_models:
-            for target_rel in model.relationships:
-                if target_rel in model_name_to_id:
-                    sg.link_model_to_model(m_id, model_name_to_id[target_rel])
-
-        return sg
+        indexer = IncrementalIndexer(repo_path=repo_path)
+        graph, _ = indexer.index(use_cache=use_cache)
+        return graph
 
     def _resolve_target_node(self, target_identifier: str) -> Optional[str]:
         target_clean = target_identifier.replace("\\", "/")
