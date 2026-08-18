@@ -1,4 +1,4 @@
-"""High-scale incremental repository indexer with SHA-256 content caching and ignore rules."""
+"""High-scale incremental repository indexer with two-tier mtime/SHA-256 caching and ignore rules."""
 
 import fnmatch
 import hashlib
@@ -7,6 +7,13 @@ import os
 from pathlib import Path
 import time
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
+
+try:
+    import pathspec
+    HAS_PATHSPEC = True
+except (ImportError, ModuleNotFoundError):
+    pathspec = None
+    HAS_PATHSPEC = False
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.core.models import (
@@ -24,33 +31,33 @@ from stackbridge.parsers.py_route_parser import PythonRouteParser
 
 DEFAULT_IGNORE_PATTERNS: List[str] = [
     ".git",
-    ".git/*",
+    ".git/**",
     "node_modules",
-    "node_modules/*",
+    "node_modules/**",
     ".venv",
-    ".venv/*",
+    ".venv/**",
     "venv",
-    "venv/*",
+    "venv/**",
     "env",
-    "env/*",
+    "env/**",
     "__pycache__",
-    "__pycache__/*",
+    "__pycache__/**",
     ".pytest_cache",
-    ".pytest_cache/*",
+    ".pytest_cache/**",
     ".stackbridge",
-    ".stackbridge/*",
+    ".stackbridge/**",
     "dist",
-    "dist/*",
+    "dist/**",
     "build",
-    "build/*",
+    "build/**",
     ".next",
-    ".next/*",
+    ".next/**",
     ".turbo",
-    ".turbo/*",
+    ".turbo/**",
     ".idea",
-    ".idea/*",
+    ".idea/**",
     ".vscode",
-    ".vscode/*",
+    ".vscode/**",
 ]
 
 
@@ -83,7 +90,7 @@ class IndexReport:
 
 
 class IncrementalIndexer:
-    """Incremental full-stack AST indexer using content-based SHA-256 caching and parallel AST parsing."""
+    """Incremental full-stack AST indexer using two-tier (mtime/size -> SHA-256) caching and parallel AST parsing."""
 
     def __init__(
         self,
@@ -98,38 +105,64 @@ class IncrementalIndexer:
         if ignore_patterns:
             self.ignore_patterns.extend(ignore_patterns)
 
+        self._pathspec_matcher = None
         self._load_gitignore_patterns()
         self.parallel_parser = ParallelASTParser(max_workers=max_workers)
 
     def _load_gitignore_patterns(self) -> None:
-        """Reads .gitignore in repository root if present and merges patterns."""
-        gitignore_path = self.repo_dir / ".gitignore"
-        if gitignore_path.exists():
+        """Discovers and parses root and nested .gitignore files in the repository."""
+        collected_lines: List[str] = list(self.ignore_patterns)
+
+        for root, dirs, files in os.walk(self.repo_dir):
+            if ".gitignore" in files:
+                git_path = Path(root) / ".gitignore"
+                rel_root = os.path.relpath(root, self.repo_dir).replace("\\", "/")
+                try:
+                    with open(git_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            clean = line.strip()
+                            if clean and not clean.startswith("#"):
+                                if rel_root != ".":
+                                    prefix = rel_root.strip("/")
+                                    collected_lines.append(f"{prefix}/{clean}")
+                                    collected_lines.append(f"{prefix}/{clean}/**")
+                                else:
+                                    collected_lines.append(clean)
+                                    collected_lines.append(f"{clean}/**")
+                                    collected_lines.append(f"**/{clean}/**")
+                                    collected_lines.append(f"**/{clean}")
+                except Exception:
+                    pass
+
+        self.ignore_patterns = collected_lines
+
+        if HAS_PATHSPEC and pathspec:
             try:
-                with open(gitignore_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line_clean = line.strip()
-                        if line_clean and not line_clean.startswith("#"):
-                            self.ignore_patterns.append(line_clean)
-                            if not line_clean.endswith("*"):
-                                self.ignore_patterns.append(f"{line_clean}/*")
-                                self.ignore_patterns.append(f"*/{line_clean}/*")
+                self._pathspec_matcher = pathspec.PathSpec.from_lines("gitwildmatch", self.ignore_patterns)
             except Exception:
-                pass
+                self._pathspec_matcher = None
 
     def should_ignore(self, rel_path: str) -> bool:
-        """Checks if a relative path matches default or .gitignore exclusion rules."""
+        """Checks if a relative path matches default or .gitignore exclusion rules using pathspec or fallback."""
         norm_path = rel_path.replace("\\", "/").strip("/")
         parts = norm_path.split("/")
 
-        # Check directory parts against common ignore names
+        # Fast direct check for common directory names
         for part in parts:
             if part in (".git", "node_modules", ".venv", "venv", "env", "__pycache__", ".pytest_cache", ".stackbridge", "dist", "build", ".next"):
                 return True
 
+        if self._pathspec_matcher:
+            try:
+                if self._pathspec_matcher.match_file(norm_path):
+                    return True
+            except Exception:
+                pass
+
+        # Robust standard fallback
         for pat in self.ignore_patterns:
-            pat_clean = pat.strip("/")
-            if fnmatch.fnmatch(norm_path, pat_clean) or fnmatch.fnmatch(norm_path, f"*/{pat_clean}"):
+            pat_clean = pat.strip("/").replace("/**", "/*")
+            if fnmatch.fnmatch(norm_path, pat_clean) or fnmatch.fnmatch(norm_path, f"*/{pat_clean}") or fnmatch.fnmatch(norm_path, f"**/{pat_clean}"):
                 return True
             if any(fnmatch.fnmatch(p, pat_clean) for p in parts):
                 return True
@@ -141,7 +174,6 @@ class IncrementalIndexer:
         candidate_files: List[Tuple[str, str]] = []
 
         for root, dirs, files in os.walk(self.repo_dir):
-            # Prune ignored directories in-place for efficiency
             rel_root = os.path.relpath(root, self.repo_dir).replace("\\", "/")
             if rel_root != ".":
                 if self.should_ignore(rel_root):
@@ -334,7 +366,7 @@ class IncrementalIndexer:
         )
 
     def index(self, use_cache: bool = True) -> Tuple[StackGraph, IndexReport]:
-        """Executes full or incremental index on repository and builds dependency graph."""
+        """Executes full or incremental index with two-tier (mtime/size -> SHA-256) caching."""
         start_time = time.perf_counter()
         files_to_scan = self.discover_files()
         total_files = len(files_to_scan)
@@ -346,37 +378,79 @@ class IncrementalIndexer:
         parsed_entries: Dict[str, Dict[str, Any]] = {}
         cached_hits = 0
 
-        # Check current SHA-256 hashes against cache
         for full_p, rel_p in files_to_scan:
             try:
-                curr_sha = self._compute_sha256(full_p)
+                stat = os.stat(full_p)
+                curr_mtime = float(stat.st_mtime)
+                curr_size = int(stat.st_size)
             except Exception:
                 continue
 
-            if use_cache and rel_p in cached_store and cached_store[rel_p].get("sha256") == curr_sha:
-                # Cache hit!
-                cached_hits += 1
-                entry = cached_store[rel_p]
-                new_cache[rel_p] = entry
-                parsed_entries[rel_p] = {
-                    "rel_path": rel_p,
-                    "full_path": full_p,
-                    "sha256": curr_sha,
-                    "fe_calls": [self._deserialize_fe_call(c) for c in entry.get("fe_calls", [])],
-                    "routes": [self._deserialize_route(r) for r in entry.get("routes", [])],
-                    "models": [self._deserialize_model(m) for m in entry.get("models", [])],
-                    "py_data": entry.get("py_data", {}),
-                }
-            else:
-                files_to_parse.append((full_p, rel_p))
+            # Tier 1: Check (mtime, size) match without disk hashing
+            if use_cache and rel_p in cached_store:
+                cached_entry = cached_store[rel_p]
+                cached_mtime = cached_entry.get("mtime")
+                cached_size = cached_entry.get("size")
+
+                if cached_mtime is not None and cached_size is not None and cached_mtime == curr_mtime and cached_size == curr_size:
+                    # Tier 1 Fast Hit: Skip SHA-256 computation
+                    cached_hits += 1
+                    new_cache[rel_p] = cached_entry
+                    parsed_entries[rel_p] = {
+                        "rel_path": rel_p,
+                        "full_path": full_p,
+                        "sha256": cached_entry.get("sha256", ""),
+                        "fe_calls": [self._deserialize_fe_call(c) for c in cached_entry.get("fe_calls", [])],
+                        "routes": [self._deserialize_route(r) for r in cached_entry.get("routes", [])],
+                        "models": [self._deserialize_model(m) for m in cached_entry.get("models", [])],
+                        "py_data": cached_entry.get("py_data", {}),
+                    }
+                    continue
+
+                # Tier 2: Check SHA-256 hash
+                try:
+                    curr_sha = self._compute_sha256(full_p)
+                except Exception:
+                    curr_sha = ""
+
+                if curr_sha and cached_entry.get("sha256") == curr_sha:
+                    # Tier 2 Hit: Content is identical, update mtime/size
+                    cached_hits += 1
+                    updated_entry = dict(cached_entry)
+                    updated_entry["mtime"] = curr_mtime
+                    updated_entry["size"] = curr_size
+                    new_cache[rel_p] = updated_entry
+                    parsed_entries[rel_p] = {
+                        "rel_path": rel_p,
+                        "full_path": full_p,
+                        "sha256": curr_sha,
+                        "fe_calls": [self._deserialize_fe_call(c) for c in cached_entry.get("fe_calls", [])],
+                        "routes": [self._deserialize_route(r) for r in cached_entry.get("routes", [])],
+                        "models": [self._deserialize_model(m) for m in cached_entry.get("models", [])],
+                        "py_data": cached_entry.get("py_data", {}),
+                    }
+                    continue
+
+            files_to_parse.append((full_p, rel_p))
 
         # Parse modified / new files in parallel
         if files_to_parse:
             fresh_results = self.parallel_parser.parse_files(files_to_parse)
             for res in fresh_results:
                 rel_p = res["rel_path"]
+                full_p = res["full_path"]
+                try:
+                    st = os.stat(full_p)
+                    res_mtime = float(st.st_mtime)
+                    res_size = int(st.st_size)
+                except Exception:
+                    res_mtime = 0.0
+                    res_size = 0
+
                 parsed_entries[rel_p] = res
                 new_cache[rel_p] = {
+                    "mtime": res_mtime,
+                    "size": res_size,
                     "sha256": res["sha256"],
                     "fe_calls": [self._serialize_fe_call(c) for c in res["fe_calls"]],
                     "routes": [self._serialize_route(r) for r in res["routes"]],
@@ -444,7 +518,6 @@ class IncrementalIndexer:
         for rel_p, data in parsed_entries.items():
             base_prefix = file_base_prefixes.get(rel_p, "")
             for r in data.get("routes", []):
-                # Copy to avoid mutating original
                 route_copy = BackendRoute(
                     file_path=r.file_path,
                     line_number=r.line_number,

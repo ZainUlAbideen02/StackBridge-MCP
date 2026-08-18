@@ -18,6 +18,7 @@ except (ImportError, ModuleNotFoundError):
 
 from stackbridge.core.graph import StackGraph
 from stackbridge.mcp_server.formatter import ContextFormatter
+from stackbridge.verifier.agent_formatter import AgentDiagnosticFormatter
 from stackbridge.verifier.engine import VerifierEngine
 
 
@@ -110,7 +111,7 @@ def trace_fullstack_path(
             os.path.basename(f) for f in blast.get("affected_files", []) if f.endswith(".tsx") or f.endswith(".ts") or f.endswith(".jsx") or f.endswith(".js")
         ]
 
-    return {
+    res = {
         "target": target_symbol,
         "found": blast.get("found", False),
         "chains": formatted_chains,
@@ -120,6 +121,8 @@ def trace_fullstack_path(
         "affected_frontend": blast.get("affected_frontend", []),
         "matched_frontend_components": affected_frontend_components,
     }
+    res["markdown_report"] = AgentDiagnosticFormatter.format_trace_report(res)
+    return res
 
 
 @mcp.tool()
@@ -205,7 +208,12 @@ def verify_schema_change(
     """Runs compiler and schema verification across all files impacted by a change."""
     engine = VerifierEngine(repo_path=repo_path)
     report = engine.verify_impacted_files(modified_files=modified_files or {}, repo_path=repo_path)
-    return report.model_dump()
+    data = report.model_dump()
+    data["markdown_report"] = AgentDiagnosticFormatter.format_breakage_report(
+        diagnostics=report.diagnostics,
+        repo_path=repo_path,
+    )
+    return data
 
 
 @mcp.tool()
@@ -213,7 +221,12 @@ def verify_breakage(repo_path: str = ".", modified_files: Optional[Dict[str, str
     """Runs compiler and schema verification across all files impacted by a change."""
     engine = VerifierEngine(repo_path=repo_path)
     report = engine.verify_impacted_files(modified_files=modified_files or {}, repo_path=repo_path)
-    return report.model_dump()
+    data = report.model_dump()
+    data["markdown_report"] = AgentDiagnosticFormatter.format_breakage_report(
+        diagnostics=report.diagnostics,
+        repo_path=repo_path,
+    )
+    return data
 
 
 @mcp.tool()
