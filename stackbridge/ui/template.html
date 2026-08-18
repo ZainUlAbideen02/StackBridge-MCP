@@ -123,6 +123,9 @@
         <button data-filter="route" class="filter-pill px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all duration-200">
           <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1.5"></span>API Routes (<span id="countBe">0</span>)
         </button>
+        <button data-filter="mcp_tool" class="filter-pill px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all duration-200">
+          <span class="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-1.5"></span>MCP Tools (<span id="countMcp">0</span>)
+        </button>
         <button data-filter="model" class="filter-pill px-3 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all duration-200">
           <span class="inline-block w-2 h-2 rounded-full bg-purple-400 mr-1.5"></span>Models (<span id="countDb">0</span>)
         </button>
@@ -461,6 +464,7 @@
 
       const feCount = nodes.filter(n => (n.group === 'frontend' || n.type === 'frontend')).length;
       const beCount = nodes.filter(n => (n.group === 'route' || n.type === 'route')).length;
+      const mcpCount = nodes.filter(n => (n.group === 'mcp_tool' || (n.http_methods && n.http_methods.includes('MCP_TOOL')))).length;
       const dbCount = nodes.filter(n => (n.group === 'model' || n.type === 'model')).length;
 
       document.getElementById('statNodes').textContent = nodes.length;
@@ -468,6 +472,7 @@
       document.getElementById('countAll').textContent = nodes.length;
       document.getElementById('countFe').textContent = feCount;
       document.getElementById('countBe').textContent = beCount;
+      if (document.getElementById('countMcp')) document.getElementById('countMcp').textContent = mcpCount;
       document.getElementById('countDb').textContent = dbCount;
     }
 
@@ -521,7 +526,8 @@
         } else if (isAffected) {
           const type = node.group || node.type;
           let origBg = '#0284C7', origBorder = '#38BDF8';
-          if (type === 'route') { origBg = '#059669'; origBorder = '#34D399'; }
+          if (type === 'mcp_tool') { origBg = '#06B6D4'; origBorder = '#22D3EE'; }
+          else if (type === 'route') { origBg = '#059669'; origBorder = '#34D399'; }
           else if (type === 'model') { origBg = '#7C3AED'; origBorder = '#A78BFA'; }
 
           nodeUpdates.push({
@@ -633,7 +639,8 @@
       const group = targetNode.group || targetNode.type || 'other';
 
       let typeBadge = '<span class="px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-600 text-[10px] font-bold">FRONTEND</span>';
-      if (group === 'route') typeBadge = '<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-600 text-[10px] font-bold">API ROUTE</span>';
+      if (group === 'mcp_tool' || (targetNode.http_methods && targetNode.http_methods.includes('MCP_TOOL'))) typeBadge = '<span class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-500 text-[10px] font-bold">[MCP_TOOL]</span>';
+      else if (group === 'route') typeBadge = '<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-600 text-[10px] font-bold">API ROUTE</span>';
       else if (group === 'model') typeBadge = '<span class="px-2 py-0.5 rounded bg-purple-950 text-purple-400 border border-purple-600 text-[10px] font-bold">ORM MODEL</span>';
 
       document.getElementById('blastStatusBadge').textContent = "Active Subgraph";
@@ -730,7 +737,11 @@
 
         let badgeClass = 'bg-sky-950 text-sky-400 border-sky-600';
         let typeName = 'UI';
-        if (group === 'route') { badgeClass = 'bg-emerald-950 text-emerald-400 border-emerald-600'; typeName = 'API'; }
+        if (group === 'mcp_tool' || (node.http_methods && node.http_methods.includes('MCP_TOOL'))) {
+          badgeClass = 'bg-cyan-950 text-cyan-400 border-cyan-500';
+          typeName = 'MCP';
+        }
+        else if (group === 'route') { badgeClass = 'bg-emerald-950 text-emerald-400 border-emerald-600'; typeName = 'API'; }
         else if (group === 'model') { badgeClass = 'bg-purple-950 text-purple-400 border-purple-600'; typeName = 'DB'; }
 
         const item = document.createElement('div');

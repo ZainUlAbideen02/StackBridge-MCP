@@ -16,17 +16,20 @@ from stackbridge.parsers.ts_fetch_parser import TypeScriptFetchParser
 class ParallelASTParser:
     """Multi-threaded AST parser that concurrently scans and extracts fullstack AST definitions."""
 
+    _init_lock = threading.Lock()
+
     def __init__(self, max_workers: Optional[int] = None) -> None:
         self.max_workers = max_workers or min(32, (os.cpu_count() or 4) + 4)
         self._thread_local = threading.local()
 
     def _get_parsers(self) -> Tuple[TypeScriptFetchParser, PythonRouteParser, SQLAlchemyParser]:
         if not hasattr(self._thread_local, "parsers"):
-            self._thread_local.parsers = (
-                TypeScriptFetchParser(),
-                PythonRouteParser(),
-                SQLAlchemyParser(),
-            )
+            with self._init_lock:
+                self._thread_local.parsers = (
+                    TypeScriptFetchParser(),
+                    PythonRouteParser(),
+                    SQLAlchemyParser(),
+                )
         return self._thread_local.parsers
 
     def parse_single_file(self, full_file_path: str, rel_file_path: Optional[str] = None) -> Dict[str, Any]:
@@ -57,24 +60,15 @@ class ParallelASTParser:
         elif ext == ".py":
             try:
                 content_str = content_bytes.decode("utf-8", errors="replace")
-                tree = py_route_parser.parser.parse(content_bytes)
-                prefixes = py_route_parser._extract_router_prefixes(tree.root_node, content_bytes)
-                imports, includes = py_route_parser._extract_imports_and_includes(tree.root_node, content_bytes)
-                parsed_routes = py_route_parser.parse_code(content_str, file_path=rel_path)
-                routes = parsed_routes
+                prefixes = py_route_parser._extract_router_prefixes(None, content_bytes)
+                imports, includes = py_route_parser._extract_imports_and_includes(None, content_bytes)
+                routes = py_route_parser.parse_code(content_str, file_path=rel_path)
+                models = sql_parser.parse_code(content_str, file_path=rel_path)
                 py_data = {
                     "prefixes": prefixes,
                     "imports": imports,
                     "includes": includes,
                 }
-            except Exception:
-                pass
-
-            try:
-                parsed_models = sql_parser.parse_file(full_file_path)
-                for m in parsed_models:
-                    m.file_path = rel_path
-                models = parsed_models
             except Exception:
                 pass
 
@@ -106,22 +100,13 @@ class ParallelASTParser:
         if not normalized_inputs:
             return []
 
-        if len(normalized_inputs) == 1:
-            full_p, rel_p = normalized_inputs[0]
-            return [self.parse_single_file(full_p, rel_p)]
-
         results: List[Dict[str, Any]] = []
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            future_to_file = {
-                executor.submit(self.parse_single_file, full_p, rel_p): rel_p
-                for full_p, rel_p in normalized_inputs
-            }
-            for future in as_completed(future_to_file):
-                try:
-                    res = future.result()
-                    results.append(res)
-                except Exception:
-                    pass
+        for full_p, rel_p in normalized_inputs:
+            try:
+                res = self.parse_single_file(full_p, rel_p)
+                results.append(res)
+            except Exception:
+                pass
 
         # Sort for deterministic ordering
         results.sort(key=lambda r: r["rel_path"])

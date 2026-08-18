@@ -43,23 +43,39 @@ def _format_node_display(node_raw: Dict[str, Any]) -> Dict[str, Any]:
         bg_color = "#0284C7"
         border_color = "#38BDF8"
 
-    # 2. API Route Handler
+    # 2. API Route Handler & MCP Server Tools
     elif node_type in ("route", "api_route"):
         methods = node_raw.get("http_methods") or [node_raw.get("http_method", "GET")]
         method_str = methods[0] if methods else "GET"
         route_path = node_raw.get("normalized_path") or node_raw.get("raw_path") or node_id.split("::")[-1]
-        label = f"[API] {method_str} {route_path}"
-        title = (
-            f"<b>[API Route]</b><br>"
-            f"<b>File:</b> {file_path}<br>"
-            f"<b>Handler:</b> {node_raw.get('function_name', 'route_handler')}()<br>"
-            f"<b>Method:</b> {method_str}<br>"
-            f"<b>Path:</b> {route_path}"
-        )
-        group = "route"
-        level = 2
-        bg_color = "#059669"
-        border_color = "#34D399"
+
+        if method_str in ("MCP_TOOL", "MCP_RESOURCE", "[MCP_TOOL]"):
+            func_name = node_raw.get("function_name") or route_path.replace("tools/", "")
+            label = f"[MCP] {func_name}"
+            title = (
+                f"<b>[MCP Server Tool]</b><br>"
+                f"<b>File:</b> {file_path}<br>"
+                f"<b>Tool:</b> {func_name}()<br>"
+                f"<b>Type:</b> {method_str}<br>"
+                f"<b>Contract:</b> {node_raw.get('response_model') or 'Standard Tool Interface'}"
+            )
+            group = "mcp_tool"
+            level = 2
+            bg_color = "#06B6D4"
+            border_color = "#22D3EE"
+        else:
+            label = f"[API] {method_str} {route_path}"
+            title = (
+                f"<b>[API Route]</b><br>"
+                f"<b>File:</b> {file_path}<br>"
+                f"<b>Handler:</b> {node_raw.get('function_name', 'route_handler')}()<br>"
+                f"<b>Method:</b> {method_str}<br>"
+                f"<b>Path:</b> {route_path}"
+            )
+            group = "route"
+            level = 2
+            bg_color = "#059669"
+            border_color = "#34D399"
 
     # 3. ORM Schema Model
     elif node_type in ("model", "schema_model"):

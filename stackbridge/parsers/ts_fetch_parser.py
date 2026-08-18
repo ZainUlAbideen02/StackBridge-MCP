@@ -2,27 +2,45 @@
 
 import os
 import re
-from typing import List, Optional, Tuple
+from typing import Generator, List, Optional, Tuple
 from tree_sitter import Language, Node, Parser
 import tree_sitter_typescript as tstypescript
 
 from stackbridge.core.models import FrontendEndpointCall, FrontendFetchCall, HttpMethod
 
 
+def _walk_ast(root_node: Node) -> Generator[Node, None, None]:
+    """Memory-safe, zero-allocation TreeCursor traversal across tree-sitter ASTs."""
+    cursor = root_node.walk()
+    visited_children = False
+    while True:
+        if not visited_children:
+            yield cursor.node
+            if cursor.goto_first_child():
+                continue
+        visited_children = False
+        if cursor.goto_next_sibling():
+            continue
+        if cursor.goto_parent():
+            visited_children = True
+            continue
+        break
+
+
 class TypeScriptFetchParser:
     """Extracts fetch / axios / custom client calls from TypeScript/TSX AST."""
 
+    _ts_lang = Language(tstypescript.language_typescript())
+    _tsx_lang = Language(tstypescript.language_tsx())
+
     def __init__(self) -> None:
-        self.ts_lang = Language(tstypescript.language_typescript())
-        self.tsx_lang = Language(tstypescript.language_tsx())
-        self.ts_parser = Parser(self.ts_lang)
-        self.tsx_parser = Parser(self.tsx_lang)
+        pass
 
     def _get_parser_for_file(self, file_path: str) -> Parser:
         ext = os.path.splitext(file_path)[1].lower()
         if ext in (".tsx", ".jsx"):
-            return self.tsx_parser
-        return self.ts_parser
+            return Parser(Language(tstypescript.language_tsx()))
+        return Parser(Language(tstypescript.language_typescript()))
 
     def _parse_method_from_options(self, options_node: Node, source_bytes: bytes) -> HttpMethod:
         """Attempts to find `method: 'POST'` in options object."""
@@ -32,9 +50,9 @@ class TypeScriptFetchParser:
                     key_node = child.child_by_field_name("key")
                     value_node = child.child_by_field_name("value")
                     if key_node and value_node:
-                        key_text = source_bytes[key_node.start_byte:key_node.end_byte].decode("utf-8").strip("'\"")
+                        key_text = source_bytes[key_node.start_byte:key_node.end_byte].decode("utf-8", errors="replace").strip("'\"")
                         if key_text.lower() == "method":
-                            method_str = source_bytes[value_node.start_byte:value_node.end_byte].decode("utf-8").strip("'\"").upper()
+                            method_str = source_bytes[value_node.start_byte:value_node.end_byte].decode("utf-8", errors="replace").strip("'\"").upper()
                             try:
                                 return HttpMethod(method_str)
                             except ValueError:
@@ -43,25 +61,25 @@ class TypeScriptFetchParser:
 
     def _extract_template_string_info(self, template_node: Node, source_bytes: bytes) -> Tuple[str, str, List[str]]:
         """Extracts raw string, normalized path, and parameter names from template literal."""
-        raw_text = source_bytes[template_node.start_byte:template_node.end_byte].decode("utf-8")
-        
+        raw_text = source_bytes[template_node.start_byte:template_node.end_byte].decode("utf-8", errors="replace")
+
         normalized_parts: List[str] = []
         path_params: List[str] = []
 
         for child in template_node.children:
             if child.type == "string_fragment":
-                fragment = source_bytes[child.start_byte:child.end_byte].decode("utf-8")
+                fragment = source_bytes[child.start_byte:child.end_byte].decode("utf-8", errors="replace")
                 normalized_parts.append(fragment)
             elif child.type == "template_substitution":
                 sub_expr = None
                 for sub_child in child.children:
                     if sub_child.type not in ("${", "}") and sub_child.is_named:
-                        sub_expr = source_bytes[sub_child.start_byte:sub_child.end_byte].decode("utf-8").strip()
+                        sub_expr = source_bytes[sub_child.start_byte:sub_child.end_byte].decode("utf-8", errors="replace").strip()
                         break
                 if not sub_expr:
-                    raw_sub = source_bytes[child.start_byte:child.end_byte].decode("utf-8")
+                    raw_sub = source_bytes[child.start_byte:child.end_byte].decode("utf-8", errors="replace")
                     sub_expr = raw_sub.lstrip("${").rstrip("}").strip()
-                
+
                 param_name = sub_expr
                 path_params.append(param_name)
                 normalized_parts.append(f"{{{param_name}}}")
@@ -69,18 +87,18 @@ class TypeScriptFetchParser:
         normalized_path = "".join(normalized_parts)
         return raw_text, normalized_path, path_params
 
-    def parse_code(self, source_code: str, file_path: str = "component.tsx") -> List[FrontendEndpointCall]:
-        """Parses TypeScript/TSX code string and returns detected frontend endpoint calls."""
+    def parse_code(self, source_code: str, file_path: str = "app.tsx") -> List[FrontendEndpointCall]:
+        """Parses TypeScript/TSX code and extracts all API fetch/axios/custom client calls."""
         parser = self._get_parser_for_file(file_path)
         source_bytes = source_code.encode("utf-8")
         tree = parser.parse(source_bytes)
         calls: List[FrontendEndpointCall] = []
 
-        def traverse(node: Node) -> None:
+        for node in _walk_ast(tree.root_node):
             if node.type == "call_expression":
                 func = node.child_by_field_name("function")
                 args = node.child_by_field_name("arguments")
-                
+
                 if func and args and len(args.named_children) > 0:
                     first_arg = args.named_children[0]
                     line_number = node.start_point.row + 1
@@ -88,7 +106,7 @@ class TypeScriptFetchParser:
                     http_method = HttpMethod.GET
 
                     if func.type == "identifier":
-                        func_name = source_bytes[func.start_byte:func.end_byte].decode("utf-8").lower()
+                        func_name = source_bytes[func.start_byte:func.end_byte].decode("utf-8", errors="replace").lower()
                         if func_name in ("fetch", "axios", "apiclient", "client", "request", "http"):
                             matched_call = True
                             if len(args.named_children) > 1:
@@ -97,7 +115,7 @@ class TypeScriptFetchParser:
                     elif func.type == "member_expression":
                         prop = func.child_by_field_name("property")
                         if prop:
-                            prop_name = source_bytes[prop.start_byte:prop.end_byte].decode("utf-8").lower()
+                            prop_name = source_bytes[prop.start_byte:prop.end_byte].decode("utf-8", errors="replace").lower()
                             if prop_name in ("get", "post", "put", "delete", "patch", "head", "options"):
                                 matched_call = True
                                 try:
@@ -111,7 +129,7 @@ class TypeScriptFetchParser:
 
                     if matched_call and first_arg:
                         if first_arg.type == "string":
-                            raw_val = source_bytes[first_arg.start_byte:first_arg.end_byte].decode("utf-8")
+                            raw_val = source_bytes[first_arg.start_byte:first_arg.end_byte].decode("utf-8", errors="replace")
                             cleaned_url = raw_val.strip("'\"`")
                             if cleaned_url.startswith("/") or "http" in cleaned_url or "/" in cleaned_url:
                                 calls.append(
@@ -141,10 +159,6 @@ class TypeScriptFetchParser:
                                 )
                             )
 
-            for child in node.children:
-                traverse(child)
-
-        traverse(tree.root_node)
         return calls
 
     def parse_file(self, file_path: str) -> List[FrontendEndpointCall]:
@@ -159,20 +173,20 @@ class TypeScriptFetchParser:
 def _extract_path_params_from_template(template_str: str) -> Tuple[str, List[str]]:
     param_pattern = r'\$\{([^}]+)\}'
     params = []
-    
+
     def replace_with_wildcard(match: re.Match) -> str:
         param_expr = match.group(1).strip()
         param_name = param_expr.split('.')[-1]
         params.append(param_name)
         return '[^/]+'
-    
+
     normalized = re.sub(param_pattern, replace_with_wildcard, template_str)
     return normalized, params
 
 
 def _parse_string_node(node: Node, source_code: bytes) -> Optional[str]:
     if node.type == 'string':
-        content = node.text.decode('utf-8')
+        content = source_code[node.start_byte:node.end_byte].decode('utf-8', errors='replace')
         if (content.startswith("'") and content.endswith("'")) or \
            (content.startswith('"') and content.endswith('"')):
             return content[1:-1]
@@ -185,9 +199,9 @@ def _extract_http_method_from_options(options_node: Node, source_code: bytes) ->
             key_node = child.child_by_field_name('key')
             value_node = child.child_by_field_name('value')
             if key_node and value_node:
-                key_text = key_node.text.decode('utf-8').strip().strip('"\'')
+                key_text = source_code[key_node.start_byte:key_node.end_byte].decode('utf-8', errors='replace').strip().strip('"\'')
                 if key_text.lower() == 'method':
-                    value_text = value_node.text.decode('utf-8').strip().strip('"\'')
+                    value_text = source_code[value_node.start_byte:value_node.end_byte].decode('utf-8', errors='replace').strip().strip('"\'')
                     return value_text.upper()
     return "GET"
 

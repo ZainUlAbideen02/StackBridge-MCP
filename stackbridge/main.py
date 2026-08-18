@@ -123,11 +123,13 @@ def main() -> None:
     index_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
     index_parser.add_argument("--output", "-o", default=None, help="Output path for serialized graph JSON")
     index_parser.add_argument("--no-cache", action="store_true", default=False, help="Bypass incremental cache and re-index all files")
+    index_parser.add_argument("--force", "-f", dest="no_cache", action="store_true", default=False, help="Force full re-indexing and bypass cache")
 
     # trace command
-    trace_parser = subparsers.add_parser("trace", help="Trace full-stack dependency chains")
+    trace_parser = subparsers.add_parser("trace", help="Trace full-stack blast radius for a model or route")
+    trace_parser.add_argument("pos_target", nargs="?", default=None, help="Target symbol, model, or route to trace")
     trace_parser.add_argument("--repo-path", "-r", default=".", help="Path to repository root")
-    trace_parser.add_argument("--target", "-t", required=True, help="Target symbol, model, or route to trace")
+    trace_parser.add_argument("--target", "-t", default=None, help="Target symbol, model, or route to trace")
 
     # guard command
     guard_parser = subparsers.add_parser("guard", help="Run full-stack boundary verification and route guard")
@@ -151,7 +153,10 @@ def main() -> None:
     if args.command == "index":
         sys.exit(run_index(args.repo_path, args.output, getattr(args, "no_cache", False)))
     elif args.command == "trace":
-        sys.exit(run_trace(args.repo_path, args.target))
+        target = args.target or args.pos_target
+        if not target:
+            trace_parser.error("the following arguments are required: target (positional or --target/-t)")
+        sys.exit(run_trace(args.repo_path, target))
     elif args.command == "guard":
         sys.exit(run_guard(args.repo_path, getattr(args, "fail_on_error", False)))
     elif args.command == "ui":

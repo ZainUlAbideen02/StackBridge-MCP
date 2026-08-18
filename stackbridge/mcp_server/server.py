@@ -58,7 +58,7 @@ def trace_fullstack_path(
     target_symbol = symbol_or_path or target or ""
     
     effective_repo = repo_path
-    if not effective_repo or effective_repo == ".":
+    if not effective_repo or effective_repo == "." or Path(effective_repo).resolve() == Path(".").resolve():
         if "tests/fixtures/synthetic_fullstack" in target_symbol or "tests\\fixtures\\synthetic_fullstack" in target_symbol:
             effective_repo = "tests/fixtures/synthetic_fullstack"
         elif "tests/fixtures/advanced_fullstack" in target_symbol or "tests\\fixtures\\advanced_fullstack" in target_symbol:

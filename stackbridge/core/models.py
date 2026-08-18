@@ -13,6 +13,8 @@ class HttpMethod(str, Enum):
     PATCH = "PATCH"
     OPTIONS = "OPTIONS"
     HEAD = "HEAD"
+    MCP_TOOL = "MCP_TOOL"
+    MCP_RESOURCE = "MCP_RESOURCE"
 
 
 class EndpointParam(BaseModel):

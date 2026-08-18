@@ -25,7 +25,6 @@ from stackbridge.core.models import (
     ORMModel,
 )
 from stackbridge.core.route_matcher import match_frontend_call_to_routes
-from stackbridge.parsers.parallel_parser import ParallelASTParser
 from stackbridge.parsers.py_route_parser import PythonRouteParser
 
 
@@ -44,8 +43,16 @@ DEFAULT_IGNORE_PATTERNS: List[str] = [
     "__pycache__/**",
     ".pytest_cache",
     ".pytest_cache/**",
+    ".mypy_cache",
+    ".mypy_cache/**",
     ".stackbridge",
     ".stackbridge/**",
+    ".gemini",
+    ".gemini/**",
+    "coverage",
+    "coverage/**",
+    "htmlcov",
+    "htmlcov/**",
     "dist",
     "dist/**",
     "build",
@@ -58,6 +65,10 @@ DEFAULT_IGNORE_PATTERNS: List[str] = [
     ".idea/**",
     ".vscode",
     ".vscode/**",
+    "tests/test_*.py",
+    "**/test_*.py",
+    "scripts/*",
+    "scripts/**",
 ]
 
 
@@ -107,6 +118,8 @@ class IncrementalIndexer:
 
         self._pathspec_matcher = None
         self._load_gitignore_patterns()
+        from stackbridge.parsers.parallel_parser import ParallelASTParser
+
         self.parallel_parser = ParallelASTParser(max_workers=max_workers)
 
     def _load_gitignore_patterns(self) -> None:
@@ -114,6 +127,31 @@ class IncrementalIndexer:
         collected_lines: List[str] = list(self.ignore_patterns)
 
         for root, dirs, files in os.walk(self.repo_dir):
+            dirs[:] = [
+                d
+                for d in dirs
+                if d
+                not in (
+                    ".git",
+                    "node_modules",
+                    ".venv",
+                    "venv",
+                    "env",
+                    "__pycache__",
+                    ".pytest_cache",
+                    ".stackbridge",
+                    ".gemini",
+                    ".idea",
+                    ".vscode",
+                    ".mypy_cache",
+                    "coverage",
+                    "htmlcov",
+                    "dist",
+                    "build",
+                    ".next",
+                    ".turbo",
+                )
+            ]
             if ".gitignore" in files:
                 git_path = Path(root) / ".gitignore"
                 rel_root = os.path.relpath(root, self.repo_dir).replace("\\", "/")
@@ -149,7 +187,26 @@ class IncrementalIndexer:
 
         # Fast direct check for common directory names
         for part in parts:
-            if part in (".git", "node_modules", ".venv", "venv", "env", "__pycache__", ".pytest_cache", ".stackbridge", "dist", "build", ".next"):
+            if part in (
+                ".git",
+                "node_modules",
+                ".venv",
+                "venv",
+                "env",
+                "__pycache__",
+                ".pytest_cache",
+                ".mypy_cache",
+                ".stackbridge",
+                ".gemini",
+                "coverage",
+                "htmlcov",
+                "dist",
+                "build",
+                ".next",
+                ".turbo",
+                ".idea",
+                ".vscode",
+            ):
                 return True
 
         if self._pathspec_matcher:
@@ -288,10 +345,14 @@ class IncrementalIndexer:
     def _deserialize_route(d: Dict[str, Any]) -> BackendRoute:
         methods = []
         for m in d.get("http_methods", ["GET"]):
+            clean_m = str(m).strip("[]'\" ")
             try:
-                methods.append(HttpMethod(m))
+                methods.append(HttpMethod(clean_m))
             except Exception:
-                methods.append(HttpMethod.GET)
+                try:
+                    methods.append(HttpMethod(str(m)))
+                except Exception:
+                    methods.append(HttpMethod.GET)
         path_params = [
             EndpointParam(
                 name=p["name"],
@@ -458,8 +519,8 @@ class IncrementalIndexer:
                     "py_data": res["py_data"],
                 }
 
-        if use_cache:
-            self._save_cache(new_cache)
+        # Save freshly indexed cache store to disk
+        self._save_cache(new_cache)
 
         # Assemble Full-Stack Dependency Graph from AST entries
         graph = self._assemble_graph(parsed_entries)

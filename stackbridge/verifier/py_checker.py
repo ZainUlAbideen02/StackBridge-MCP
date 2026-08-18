@@ -32,10 +32,14 @@ PythonDiagnostic = DiagnosticError
 class PythonTypeVerifier:
     """Verifies schema consistency, attribute accesses, and type errors across Python route handlers and models."""
 
+    _py_lang = Language(tspython.language())
+
     def __init__(self) -> None:
-        self.py_lang = Language(tspython.language())
-        self.parser = Parser(self.py_lang)
         self.sql_parser = SQLAlchemyParser()
+
+    @property
+    def parser(self) -> Parser:
+        return Parser(Language(tspython.language()))
 
     def _extract_model_fields_map(self, model_files_content: Dict[str, str]) -> Dict[str, Set[str]]:
         """Maps model class name -> set of valid field and relationship names."""
