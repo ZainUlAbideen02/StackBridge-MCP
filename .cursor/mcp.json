@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "stackbridge": {
+      "command": "python",
+      "args": ["-m", "stackbridge.main", "serve", "--transport", "stdio"]
+    }
+  }
+}

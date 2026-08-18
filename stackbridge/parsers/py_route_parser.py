@@ -29,24 +29,30 @@ class PythonRouteParser:
         own_prefixes: Dict[str, str] = {}
         includes: List[Tuple[str, str, str]] = []
 
-        def traverse(node: Node) -> None:
+        stack = [root_node]
+        while stack:
+            node = stack.pop()
             if node.type == "assignment":
                 left = node.child_by_field_name("left")
                 right = node.child_by_field_name("right")
                 if left and right and right.type == "call":
                     func = right.child_by_field_name("function")
-                    if func and func.text in (b"APIRouter", b"FastAPI"):
-                        var_name = source_bytes[left.start_byte:left.end_byte].decode("utf-8").strip()
-                        args = right.child_by_field_name("arguments")
-                        prefix_val = ""
-                        if args:
-                            for arg in args.children:
-                                if arg.type == "keyword_argument":
-                                    k_name = arg.child_by_field_name("name")
-                                    k_value = arg.child_by_field_name("value")
-                                    if k_name and k_value and k_name.text == b"prefix":
-                                        prefix_val = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8").strip("'\"")
-                        own_prefixes[var_name] = prefix_val
+                    if func:
+                        func_name = source_bytes[func.start_byte:func.end_byte].decode("utf-8", errors="replace").strip()
+                        if func_name in ("APIRouter", "FastAPI") or func_name.endswith(".APIRouter") or func_name.endswith(".FastAPI"):
+                            var_name = source_bytes[left.start_byte:left.end_byte].decode("utf-8", errors="replace").strip()
+                            args = right.child_by_field_name("arguments")
+                            prefix_val = ""
+                            if args:
+                                for arg in args.children:
+                                    if arg.type == "keyword_argument":
+                                        k_name = arg.child_by_field_name("name")
+                                        k_value = arg.child_by_field_name("value")
+                                        if k_name and k_value:
+                                            kn = source_bytes[k_name.start_byte:k_name.end_byte].decode("utf-8", errors="replace").strip()
+                                            if kn == "prefix":
+                                                prefix_val = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8", errors="replace").strip("'\"")
+                            own_prefixes[var_name] = prefix_val
 
             elif node.type in ("expression_statement", "call"):
                 call_node = node if node.type == "call" else (node.children[0] if node.children and node.children[0].type == "call" else None)
@@ -55,25 +61,26 @@ class PythonRouteParser:
                     if func and func.type == "attribute":
                         attr = func.child_by_field_name("attribute")
                         obj = func.child_by_field_name("object")
-                        if attr and attr.text == b"include_router" and obj:
-                            parent_var = source_bytes[obj.start_byte:obj.end_byte].decode("utf-8").strip()
-                            args = call_node.child_by_field_name("arguments")
-                            if args and len(args.named_children) > 0:
-                                target_var_node = args.named_children[0]
-                                target_var = source_bytes[target_var_node.start_byte:target_var_node.end_byte].decode("utf-8").strip()
-                                inc_prefix = ""
-                                for arg in args.named_children[1:]:
-                                    if arg.type == "keyword_argument":
-                                        k_name = arg.child_by_field_name("name")
-                                        k_value = arg.child_by_field_name("value")
-                                        if k_name and k_value and k_name.text == b"prefix":
-                                            inc_prefix = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8").strip("'\"")
-                                includes.append((parent_var, target_var, inc_prefix))
+                        if attr and obj:
+                            attr_name = source_bytes[attr.start_byte:attr.end_byte].decode("utf-8", errors="replace").strip()
+                            if attr_name == "include_router":
+                                parent_var = source_bytes[obj.start_byte:obj.end_byte].decode("utf-8", errors="replace").strip()
+                                args = call_node.child_by_field_name("arguments")
+                                if args and len(args.named_children) > 0:
+                                    target_var_node = args.named_children[0]
+                                    target_var = source_bytes[target_var_node.start_byte:target_var_node.end_byte].decode("utf-8", errors="replace").strip()
+                                    inc_prefix = ""
+                                    for arg in args.named_children[1:]:
+                                        if arg.type == "keyword_argument":
+                                            k_name = arg.child_by_field_name("name")
+                                            k_value = arg.child_by_field_name("value")
+                                            if k_name and k_value:
+                                                kn = source_bytes[k_name.start_byte:k_name.end_byte].decode("utf-8", errors="replace").strip()
+                                                if kn == "prefix":
+                                                    inc_prefix = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8", errors="replace").strip("'\"")
+                                    includes.append((parent_var, target_var, inc_prefix))
 
-            for child in node.children:
-                traverse(child)
-
-        traverse(root_node)
+            stack.extend(node.children)
 
         # Compute accumulated prefixes idempotently
         accumulated: Dict[str, str] = dict(own_prefixes)
@@ -92,22 +99,23 @@ class PythonRouteParser:
         imports: Dict[str, str] = {}
         includes: List[Tuple[str, str, str]] = []
 
-        def traverse(node: Node) -> None:
+        stack = [root_node]
+        while stack:
+            node = stack.pop()
             if node.type == "import_from_statement":
                 module_name = ""
                 for child in node.children:
                     if child.type in ("dotted_name", "relative_import"):
-                        module_name = source_bytes[child.start_byte:child.end_byte].decode("utf-8").strip()
+                        module_name = source_bytes[child.start_byte:child.end_byte].decode("utf-8", errors="replace").strip()
                         break
                 for child in node.children:
                     if child.type == "dotted_name" and child.prev_sibling and child.prev_sibling.type == "import":
-                        sym = source_bytes[child.start_byte:child.end_byte].decode("utf-8").strip()
+                        sym = source_bytes[child.start_byte:child.end_byte].decode("utf-8", errors="replace").strip()
                         imports[sym] = module_name
                     elif child.type == "aliased_import":
-                        orig = child.child_by_field_name("name")
                         alias = child.child_by_field_name("alias")
                         if alias:
-                            alias_name = source_bytes[alias.start_byte:alias.end_byte].decode("utf-8").strip()
+                            alias_name = source_bytes[alias.start_byte:alias.end_byte].decode("utf-8", errors="replace").strip()
                             imports[alias_name] = module_name
 
             elif node.type in ("expression_statement", "call"):
@@ -117,25 +125,27 @@ class PythonRouteParser:
                     if func and func.type == "attribute":
                         attr = func.child_by_field_name("attribute")
                         obj = func.child_by_field_name("object")
-                        if attr and attr.text == b"include_router" and obj:
-                            parent_var = source_bytes[obj.start_byte:obj.end_byte].decode("utf-8").strip()
-                            args = call_node.child_by_field_name("arguments")
-                            if args and len(args.named_children) > 0:
-                                target_var_node = args.named_children[0]
-                                target_var = source_bytes[target_var_node.start_byte:target_var_node.end_byte].decode("utf-8").strip()
-                                inc_prefix = ""
-                                for arg in args.named_children[1:]:
-                                    if arg.type == "keyword_argument":
-                                        k_name = arg.child_by_field_name("name")
-                                        k_value = arg.child_by_field_name("value")
-                                        if k_name and k_value and k_name.text == b"prefix":
-                                            inc_prefix = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8").strip("'\"")
-                                includes.append((parent_var, target_var, inc_prefix))
+                        if attr and obj:
+                            attr_name = source_bytes[attr.start_byte:attr.end_byte].decode("utf-8", errors="replace").strip()
+                            if attr_name == "include_router":
+                                parent_var = source_bytes[obj.start_byte:obj.end_byte].decode("utf-8", errors="replace").strip()
+                                args = call_node.child_by_field_name("arguments")
+                                if args and len(args.named_children) > 0:
+                                    target_var_node = args.named_children[0]
+                                    target_var = source_bytes[target_var_node.start_byte:target_var_node.end_byte].decode("utf-8", errors="replace").strip()
+                                    inc_prefix = ""
+                                    for arg in args.named_children[1:]:
+                                        if arg.type == "keyword_argument":
+                                            k_name = arg.child_by_field_name("name")
+                                            k_value = arg.child_by_field_name("value")
+                                            if k_name and k_value:
+                                                kn = source_bytes[k_name.start_byte:k_name.end_byte].decode("utf-8", errors="replace").strip()
+                                                if kn == "prefix":
+                                                    inc_prefix = source_bytes[k_value.start_byte:k_value.end_byte].decode("utf-8", errors="replace").strip("'\"")
+                                    includes.append((parent_var, target_var, inc_prefix))
 
-            for child in node.children:
-                traverse(child)
+            stack.extend(node.children)
 
-        traverse(root_node)
         return imports, includes
 
     def _parse_route_decorator(
@@ -174,23 +184,23 @@ class PythonRouteParser:
     def _extract_orm_references_from_func(self, func_node: Node, source_bytes: bytes) -> List[str]:
         """Extracts referenced ORM models (e.g. db.query(BillingAccount), select(User)) from function node."""
         refs: Set[str] = set()
-        
-        def traverse(node: Node) -> None:
+
+        stack = [func_node]
+        while stack:
+            node = stack.pop()
             if node.type == "call":
                 func = node.child_by_field_name("function")
                 if func:
-                    func_text = source_bytes[func.start_byte:func.end_byte].decode("utf-8")
-                    if func_text.endswith(".query") or func_text == "select":
+                    func_text = source_bytes[func.start_byte:func.end_byte].decode("utf-8", errors="replace").strip()
+                    if func_text.endswith(".query") or func_text == "select" or func_text.endswith(".select"):
                         args = node.child_by_field_name("arguments")
                         if args:
                             for arg in args.children:
                                 if arg.type == "identifier":
-                                    id_name = source_bytes[arg.start_byte:arg.end_byte].decode("utf-8")
+                                    id_name = source_bytes[arg.start_byte:arg.end_byte].decode("utf-8", errors="replace").strip()
                                     refs.add(id_name)
-            for child in node.children:
-                traverse(child)
+            stack.extend(node.children)
 
-        traverse(func_node)
         return sorted(list(refs))
 
     def parse_code(self, source_code: str, file_path: str = "routes.py") -> List[BackendRoute]:

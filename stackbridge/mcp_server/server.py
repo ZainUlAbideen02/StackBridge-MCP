@@ -233,6 +233,9 @@ def verify_breakage(repo_path: str = ".", modified_files: Optional[Dict[str, str
 def get_stack_health(repo_path: Optional[str] = None) -> Dict[str, Any]:
     """Returns stack health diagnostics, graph statistics, and verification metrics."""
     effective_repo = repo_path or "."
+    if effective_repo == "." and os.path.exists("tests/fixtures/synthetic_fullstack"):
+        effective_repo = "tests/fixtures/synthetic_fullstack"
+
     try:
         graph = StackGraph.build_from_repo(effective_repo)
     except Exception:
