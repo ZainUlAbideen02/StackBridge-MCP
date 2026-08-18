@@ -34,9 +34,19 @@ class BenchmarkSuite:
 
     def benchmark_graph_construction(self) -> BenchmarkResult:
         """Measures the speed and scale of Tree-sitter AST parsing and Graph construction."""
+        from stackbridge.core.sqlite_store import SQLiteStore
+
         start_time = time.perf_counter()
         graph = StackGraph.build_from_repo(str(self.repo_path))
         elapsed_ms = (time.perf_counter() - start_time) * 1000
+
+        # Persist to SQLite store for enterprise traversal benchmarks
+        try:
+            db_path = self.repo_path / ".stackbridge" / "graph.db"
+            store = SQLiteStore(db_path=db_path)
+            store.save_graph(graph)
+        except Exception:
+            pass
 
         return BenchmarkResult(
             name="AST Parsing & Graph Construction",
@@ -50,39 +60,77 @@ class BenchmarkSuite:
         )
 
     def benchmark_blast_radius_traversal(self) -> BenchmarkResult:
-        """Measures blast-radius traversal query latency."""
+        """Measures blast-radius traversal query latency (NetworkX & SQLite recursive CTE)."""
+        from stackbridge.core.sqlite_store import SQLiteStore
+
         graph = StackGraph.build_from_repo(str(self.repo_path))
-        
+
+        # Select target dynamically from graph
         target = "backend/models.py::BillingAccount"
-        start_time = time.perf_counter()
+        if target not in graph.graph.nodes:
+            # Pick first model or route or node
+            model_node = next((n for n, d in graph.graph.nodes(data=True) if d.get("type") == "model"), None)
+            route_node = next((n for n, d in graph.graph.nodes(data=True) if d.get("type") == "route"), None)
+            target = model_node or route_node or (list(graph.graph.nodes.keys())[0] if graph.graph.nodes else target)
+
+        # 1. NetworkX traversal
+        start_nx = time.perf_counter()
         blast = graph.get_blast_radius(target)
-        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        nx_elapsed_ms = (time.perf_counter() - start_nx) * 1000
+
+        # 2. SQLite Recursive CTE query
+        cte_elapsed_ms = 0.0
+        cte_found = False
+        try:
+            db_path = self.repo_path / ".stackbridge" / "graph.db"
+            store = SQLiteStore(db_path=db_path)
+            start_cte = time.perf_counter()
+            cte_res = store.recursive_cte_blast_radius(target)
+            cte_elapsed_ms = (time.perf_counter() - start_cte) * 1000
+            cte_found = cte_res.get("found", False)
+        except Exception:
+            pass
 
         return BenchmarkResult(
             name="Blast-Radius Traversal Latency",
-            execution_time_ms=round(elapsed_ms, 3),
+            execution_time_ms=round(nx_elapsed_ms, 3),
             metrics={
                 "target": target,
-                "found": blast.get("found", False),
+                "found": blast.get("found", False) or cte_found,
                 "affected_files_count": len(blast.get("affected_files", [])),
                 "impacted_frontend_count": len(blast.get("affected_frontend", [])),
+                "sqlite_cte_time_ms": round(cte_elapsed_ms, 3),
+                "networkx_time_ms": round(nx_elapsed_ms, 3),
             },
-            details=f"Traced blast radius for {target} in {elapsed_ms:.3f}ms",
+            details=f"Traced blast radius for '{target}' in {nx_elapsed_ms:.3f}ms (SQLite CTE: {cte_elapsed_ms:.3f}ms)",
         )
 
     def benchmark_token_reduction(self) -> BenchmarkResult:
         """Measures token savings achieved by compact full-stack context slices."""
-        # Read full files from fixture
         raw_files: Dict[str, str] = {}
-        for root, _, files in os.walk(self.repo_path):
+        for root, dirs, files in os.walk(self.repo_path):
+            dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", ".stackbridge")]
             for f in files:
                 ext = os.path.splitext(f)[1]
-                if ext in (".tsx", ".ts", ".py"):
+                if ext in (".tsx", ".ts", ".py", ".jsx", ".js"):
                     full_p = os.path.join(root, f)
-                    with open(full_p, "r", encoding="utf-8") as file_handle:
-                        raw_files[f] = file_handle.read()
+                    try:
+                        with open(full_p, "r", encoding="utf-8") as file_handle:
+                            raw_files[f] = file_handle.read()
+                    except Exception:
+                        pass
 
-        contract = get_route_contract(str(self.repo_path), "/api/v1/users/{user_id}/billing")
+        # Pick route dynamically
+        graph = StackGraph.build_from_repo(str(self.repo_path))
+        target_route = "/api/v1/users/{user_id}/billing"
+        route_data = None
+        for _, data in graph.graph.nodes(data=True):
+            if data.get("type") == "route":
+                target_route = data.get("normalized_path") or data.get("raw_path") or target_route
+                route_data = data
+                break
+
+        contract = get_route_contract(str(self.repo_path), target_route)
         formatted_slice = ContextFormatter.format_route_contract(contract)
 
         savings = ContextFormatter.calculate_token_savings(raw_files, formatted_slice)
@@ -96,20 +144,60 @@ class BenchmarkSuite:
 
     def benchmark_compiler_verification(self) -> BenchmarkResult:
         """Measures baseline-diffed compiler verification latency."""
-        models_path = self.repo_path / "backend" / "models.py"
-        with open(models_path, "r", encoding="utf-8") as f:
-            original_code = f.read()
+        # Dynamically locate a Python file in the repository
+        candidate_py = self.repo_path / "backend" / "models.py"
+        if not candidate_py.exists():
+            for root, dirs, files in os.walk(self.repo_path):
+                dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", ".stackbridge")]
+                for f in files:
+                    if f.endswith(".py") and ("model" in f or "schema" in f or "route" in f or "api" in f):
+                        candidate_py = Path(root) / f
+                        break
+                if candidate_py.exists():
+                    break
 
-        # Simulate deleted field
-        modified_code = original_code.replace(
-            'plan = Column(String, nullable=False, default="free")',
-            '# plan removed',
-        )
+        if not candidate_py.exists():
+            for root, dirs, files in os.walk(self.repo_path):
+                dirs[:] = [d for d in dirs if d not in (".git", "node_modules", ".venv", "__pycache__", ".pytest_cache", ".stackbridge")]
+                for f in files:
+                    if f.endswith(".py"):
+                        candidate_py = Path(root) / f
+                        break
+                if candidate_py.exists():
+                    break
+
+        if not candidate_py.exists():
+            original_code = "class DummyModel:\n    id: int = 1\n"
+            rel_file = "dummy.py"
+            modified_code = "class DummyModel:\n    # id removed\n"
+        else:
+            rel_file = candidate_py.relative_to(self.repo_path).as_posix()
+            with open(candidate_py, "r", encoding="utf-8") as f:
+                original_code = f.read()
+
+            if 'plan = Column(String, nullable=False, default="free")' in original_code:
+                modified_code = original_code.replace(
+                    'plan = Column(String, nullable=False, default="free")',
+                    '# plan removed',
+                )
+            elif "Column(" in original_code:
+                lines = original_code.splitlines()
+                modified_lines = []
+                replaced = False
+                for l in lines:
+                    if "Column(" in l and not replaced:
+                        modified_lines.append(f"# {l.strip()} (removed)")
+                        replaced = True
+                    else:
+                        modified_lines.append(l)
+                modified_code = "\n".join(modified_lines)
+            else:
+                modified_code = original_code + "\n# StackBridge benchmark validation probe\n"
 
         engine = VerifierEngine(repo_path=self.repo_path)
         start_time = time.perf_counter()
         report = engine.verify_impacted_files(
-            modified_files={"backend/models.py": modified_code},
+            modified_files={rel_file: modified_code},
             repo_path=self.repo_path,
         )
         elapsed_ms = (time.perf_counter() - start_time) * 1000

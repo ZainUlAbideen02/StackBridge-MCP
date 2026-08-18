@@ -28,4 +28,5 @@ stackbridge = "stackbridge.main:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+norecursedirs = ["real_repos", "tests/real_repos", ".stackbridge"]
 
